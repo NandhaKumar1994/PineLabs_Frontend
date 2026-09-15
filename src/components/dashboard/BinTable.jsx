@@ -4,22 +4,34 @@ import {
   Plus,
   Search,
   Download,
-  MoreHorizontal,
   Copy,
   Check,
   X,
 } from 'lucide-react'
-import { binSeries } from '../../data/binSeries'
+import { binSeries, stampNow } from '../../data/binSeries'
+import { formatDateTime } from '../../data/users'
 import { useDebounce } from '../../hooks/useDebounce'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../common/Pagination'
+import AddRowModal from './AddRowModal'
+import UploadSheetModal from './UploadSheetModal'
+import RowActionsMenu from './RowActionsMenu'
+import DeleteRowModal from './DeleteRowModal'
+import { downloadCsv, serializeCsv, issuerKey } from '../../utils/csv'
 
 const columnLabels = {
   issuer: 'Issuer',
   cardProgramGroupName: 'Card Program Group Name',
   binIin: 'BIN / IIN Code',
   merchantPrefix: 'Merchant Prefix',
+  updatedBy: 'Updated By',
+  updatedAt: 'Updated At',
 }
+
+const HIDDEN_COLS = new Set(['id', 'updatedAt'])
+const FORM_SKIP = new Set(['id', 'updatedBy', 'updatedAt'])
+
+const newId = () => `bin-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
 const humanize = (key) =>
   key
@@ -30,21 +42,88 @@ const humanize = (key) =>
 export default function BinTable() {
   const [query, setQuery] = useState('')
   const [copied, setCopied] = useState(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
+  const [editRow, setEditRow] = useState(null)
+  const [deleteRow, setDeleteRow] = useState(null)
+  const [data, setData] = useState(() => [...binSeries])
 
-  const columns = useMemo(
-    () => (binSeries[0] ? Object.keys(binSeries[0]) : []),
-    []
+  const allColumns = useMemo(
+    () => (data[0] ? Object.keys(data[0]) : Object.keys(columnLabels)),
+    [data]
   )
+  const columns = useMemo(() => allColumns.filter((col) => !HIDDEN_COLS.has(col)), [allColumns])
+  const formColumns = useMemo(() => allColumns.filter((col) => !FORM_SKIP.has(col)), [allColumns])
+  const exportColumns = useMemo(() => allColumns.filter((col) => col !== 'id'), [allColumns])
 
   const debouncedQuery = useDebounce(query, 200)
 
   const rows = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase()
-    if (!q) return binSeries
-    return binSeries.filter((r) =>
+    // Apply a filter immediately when the box is cleared (e.g. after Add Row)
+    // so the new first record is visible without waiting on debounce.
+    const source = query.trim() === '' ? query : debouncedQuery
+    const q = source.trim().toLowerCase()
+    if (!q) return data
+    return data.filter((r) =>
       Object.values(r).some((v) => String(v).toLowerCase().includes(q))
     )
-  }, [debouncedQuery])
+  }, [debouncedQuery, query, data])
+
+  const addRow = (row) => {
+    setData((prev) => [{ ...row, id: newId(), ...stampNow() }, ...prev])
+    setQuery('')
+  }
+
+  const saveEdit = (next) => {
+    if (!editRow) return
+    setData((prev) =>
+      prev.map((row) => (row.id === editRow.id ? { ...row, ...next, ...stampNow() } : row))
+    )
+    setEditRow(null)
+  }
+
+  const confirmDelete = () => {
+    if (!deleteRow) return
+    setData((prev) => prev.filter((row) => row.id !== deleteRow.id))
+    setDeleteRow(null)
+  }
+
+  const updateExisting = (updates) => {
+    const queues = new Map()
+    updates.forEach((incoming) => {
+      const key = issuerKey(incoming)
+      if (!key) return
+      if (!queues.has(key)) queues.set(key, [])
+      queues.get(key).push(incoming)
+    })
+    setData((prev) =>
+      prev.map((row) => {
+        const queue = queues.get(issuerKey(row))
+        if (!queue?.length) return row
+        const incoming = queue.shift()
+        const next = { ...row, ...stampNow() }
+        formColumns.forEach((col) => {
+          if (col === 'issuer') return
+          const value = String(incoming[col] ?? '').trim()
+          if (value !== '') next[col] = value
+        })
+        return next
+      })
+    )
+    setQuery('')
+  }
+
+  const addSheet = (incoming) => {
+    setData((prev) => [
+      ...incoming.map((row) => ({ ...row, id: newId(), ...stampNow() })),
+      ...prev,
+    ])
+    setQuery('')
+  }
+
+  const exportSheet = () => {
+    downloadCsv('bin-series.csv', serializeCsv(exportColumns, columnLabels, data))
+  }
 
   const pager = usePagination(rows, 50)
 
@@ -81,15 +160,24 @@ export default function BinTable() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light">
+          <button
+            onClick={exportSheet}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
+          >
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Export</span>
           </button>
-          <button className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light">
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
+          >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add Row</span>
           </button>
-          <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90">
+          <button
+            onClick={() => setShowUpload(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90"
+          >
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline">Upload Sheet</span>
           </button>
@@ -114,22 +202,22 @@ export default function BinTable() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {pager.pageItems.map((row, i) => (
-              <tr key={i} className="group transition hover:bg-primary/[0.03]">
+              <tr key={row.id || i} className="group transition hover:bg-primary/[0.03]">
                 {columns.map((col) =>
                   col === 'issuer' ? (
                     <td key={col} className="whitespace-nowrap px-5 py-2.5">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-heading">{row[col]}</span>
                         <button
-                          onClick={() => copy(row[col], `${i}-issuer`)}
+                          onClick={() => copy(row[col], `${row.id || i}-issuer`)}
                           title="Copy issuer name"
                           className={`grid h-6 w-6 place-items-center rounded-md transition ${
-                            copied === `${i}-issuer`
+                            copied === `${row.id || i}-issuer`
                               ? 'bg-emerald-50 text-emerald-600'
                               : 'text-gray-300 opacity-0 hover:bg-grey-light hover:text-primary group-hover:opacity-100'
                           }`}
                         >
-                          {copied === `${i}-issuer` ? (
+                          {copied === `${row.id || i}-issuer` ? (
                             <Check className="h-3.5 w-3.5" />
                           ) : (
                             <Copy className="h-3.5 w-3.5" />
@@ -143,6 +231,11 @@ export default function BinTable() {
                         {row[col]}
                       </span>
                     </td>
+                  ) : col === 'updatedBy' ? (
+                    <td key={col} className="whitespace-nowrap px-5 py-2.5">
+                      <p className="text-sm font-medium text-heading">{row.updatedBy}</p>
+                      <p className="text-xs text-body">{formatDateTime(row.updatedAt)}</p>
+                    </td>
                   ) : (
                     <td key={col} className="whitespace-nowrap px-5 py-2.5 text-body">
                       {row[col]}
@@ -150,9 +243,10 @@ export default function BinTable() {
                   )
                 )}
                 <td className="px-5 py-2.5 text-right">
-                  <button className="grid h-7 w-7 place-items-center rounded-md text-gray-300 transition hover:bg-gray-100 hover:text-heading">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
+                  <RowActionsMenu
+                    onEdit={() => setEditRow(row)}
+                    onDelete={() => setDeleteRow(row)}
+                  />
                 </td>
               </tr>
             ))}
@@ -184,6 +278,42 @@ export default function BinTable() {
           label="records"
         />
       </div>
+
+      {showAdd && (
+        <AddRowModal
+          columns={formColumns}
+          labels={columnLabels}
+          examples={data[0]}
+          onClose={() => setShowAdd(false)}
+          onSubmit={addRow}
+        />
+      )}
+      {editRow && (
+        <AddRowModal
+          columns={formColumns}
+          labels={columnLabels}
+          examples={data[0]}
+          initial={editRow}
+          onClose={() => setEditRow(null)}
+          onSubmit={saveEdit}
+        />
+      )}
+      {deleteRow && (
+        <DeleteRowModal
+          onClose={() => setDeleteRow(null)}
+          onConfirm={confirmDelete}
+        />
+      )}
+      {showUpload && (
+        <UploadSheetModal
+          columns={formColumns}
+          labels={columnLabels}
+          existingRows={data}
+          onClose={() => setShowUpload(false)}
+          onUpdateExisting={updateExisting}
+          onAddNew={addSheet}
+        />
+      )}
     </section>
   )
 }

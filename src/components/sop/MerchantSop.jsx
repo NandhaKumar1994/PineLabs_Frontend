@@ -3,8 +3,9 @@ import { ArrowLeft, Store, FileSpreadsheet, Layers } from 'lucide-react'
 import SopSheet from './SopSheet'
 import SopValidateModal from './SopValidateModal'
 import { commonEscalation } from '../../data/sopData'
+import { stampEditor } from '../../data/users'
 
-export default function MerchantSop({ merchant, initialKey, onBack }) {
+export default function MerchantSop({ merchant, initialKey, onBack, onMerchantChange }) {
   const validInitial = merchant.subsheets.some((s) => s.key === initialKey)
   const [activeKey, setActiveKey] = useState(
     validInitial ? initialKey : merchant.subsheets[0].key
@@ -19,6 +20,14 @@ export default function MerchantSop({ merchant, initialKey, onBack }) {
   const validateSheets = [active, poc, escalation].filter(
     (s, i, arr) => s && arr.indexOf(s) === i
   )
+
+  const handleRowsChange = (sheetKey, rows) => {
+    onMerchantChange?.({
+      ...merchant,
+      ...stampEditor(),
+      subsheets: merchant.subsheets.map((s) => (s.key === sheetKey ? { ...s, rows } : s)),
+    })
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -76,7 +85,7 @@ export default function MerchantSop({ merchant, initialKey, onBack }) {
       </div>
 
       {/* active subsheet */}
-      <SopSheet sheet={active} title={active.name} />
+      <SopSheet sheet={active} title={active.name} onRowsChange={handleRowsChange} />
 
       {showModal && (
         <SopValidateModal

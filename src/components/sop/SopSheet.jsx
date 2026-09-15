@@ -1,20 +1,39 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Download, Filter, X, ChevronDown } from 'lucide-react'
+import { Search, Download, Filter, X, ChevronDown, Plus } from 'lucide-react'
 import { useDebounce } from '../../hooks/useDebounce'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../common/Pagination'
+import AddRowModal from '../dashboard/AddRowModal'
+import RowActionsMenu from '../dashboard/RowActionsMenu'
+import DeleteRowModal from '../dashboard/DeleteRowModal'
 
 const groupTint = ['bg-primary/5 text-primary', 'bg-amber-50 text-amber-700', 'bg-teal-50 text-teal-700']
 
-export default function SopSheet({ sheet, title }) {
+const newRowId = () => `sop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+
+const tagRows = (rows, key) =>
+  rows.map((r, i) => (r._rowId ? r : { ...r, _rowId: `${key}-${i}` }))
+
+export default function SopSheet({ sheet, title, enableAddRow = true, onRowsChange }) {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState({}) // { column: value }
   const [showFilters, setShowFilters] = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
+  const [editRow, setEditRow] = useState(null)
+  const [deleteRow, setDeleteRow] = useState(null)
+  const [rowsByKey, setRowsByKey] = useState({})
 
   const flatColumns = useMemo(
     () => sheet.groups.flatMap((g) => g.columns),
     [sheet]
   )
+
+  const columnLabels = useMemo(
+    () => Object.fromEntries(flatColumns.map((col) => [col, col])),
+    [flatColumns]
+  )
+
+  const data = rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)
 
   // Reset search + filters whenever the active subsheet changes, since
   // columns differ between sheets.
@@ -22,34 +41,61 @@ export default function SopSheet({ sheet, title }) {
     setQuery('')
     setFilters({})
     setShowFilters(false)
+    setShowAdd(false)
+    setEditRow(null)
+    setDeleteRow(null)
   }, [sheet])
 
   // unique values per column for the filter dropdowns
   const columnValues = useMemo(() => {
     const map = {}
     flatColumns.forEach((col) => {
-      map[col] = [...new Set(sheet.rows.map((r) => r[col]))].filter(Boolean).sort()
+      map[col] = [...new Set(data.map((r) => r[col]))].filter(Boolean).sort()
     })
     return map
-  }, [flatColumns, sheet])
+  }, [flatColumns, data])
 
   const debouncedQuery = useDebounce(query, 200)
 
   const rows = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase()
-    return sheet.rows.filter((r) => {
-      // text search across all cells
+    const source = query.trim() === '' ? query : debouncedQuery
+    const q = source.trim().toLowerCase()
+    return data.filter((r) => {
       if (q && !Object.values(r).some((v) => String(v).toLowerCase().includes(q)))
         return false
-      // per-column filters
       for (const [col, val] of Object.entries(filters)) {
         if (val && r[col] !== val) return false
       }
       return true
     })
-  }, [debouncedQuery, filters, sheet])
+  }, [debouncedQuery, query, filters, data])
 
   const pager = usePagination(rows, 50)
+
+  const commitRows = (list) => {
+    setRowsByKey((prev) => ({ ...prev, [sheet.key]: list }))
+    onRowsChange?.(sheet.key, list)
+  }
+
+  const addRow = (row) => {
+    commitRows([{ ...row, _rowId: newRowId() }, ...(rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key))])
+    setQuery('')
+  }
+
+  const saveEdit = (next) => {
+    if (!editRow) return
+    const list = (rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)).map((r) =>
+      r._rowId === editRow._rowId ? { ...r, ...next, _rowId: editRow._rowId } : r
+    )
+    commitRows(list)
+    setEditRow(null)
+  }
+
+  const confirmDelete = () => {
+    if (!deleteRow) return
+    commitRows((rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)).filter((r) => r._rowId !== deleteRow._rowId))
+    setDeleteRow(null)
+  }
 
   const setFilter = (col, val) =>
     setFilters((f) => {
@@ -70,7 +116,7 @@ export default function SopSheet({ sheet, title }) {
             <div className="flex items-center gap-2">
               <h3 className="whitespace-nowrap text-sm font-bold text-heading">{title}</h3>
               <span className="rounded-full bg-grey-light px-2 py-0.5 text-[11px] font-medium text-body">
-                {sheet.rows.length}
+                {data.length}
               </span>
               <span className="hidden h-5 w-px bg-gray-200 sm:block" />
             </div>
@@ -87,6 +133,16 @@ export default function SopSheet({ sheet, title }) {
         </div>
 
         <div className="flex items-center gap-2">
+          {enableAddRow && (
+            <button
+              type="button"
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Row</span>
+            </button>
+          )}
           <button
             onClick={() => setShowFilters((v) => !v)}
             className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
@@ -165,6 +221,7 @@ export default function SopSheet({ sheet, title }) {
                   {g.group}
                 </th>
               ))}
+              <th rowSpan={2} className="w-12 border border-gray-200 bg-white" />
             </tr>
             <tr>
               {flatColumns.map((col) => (
@@ -180,8 +237,8 @@ export default function SopSheet({ sheet, title }) {
             </tr>
           </thead>
           <tbody>
-            {pager.pageItems.map((row, i) => (
-              <tr key={i} className="transition hover:bg-primary/[0.03]">
+            {pager.pageItems.map((row) => (
+              <tr key={row._rowId} className="transition hover:bg-primary/[0.03]">
                 {flatColumns.map((col) => (
                   <td
                     key={col}
@@ -190,11 +247,17 @@ export default function SopSheet({ sheet, title }) {
                     <CellValue value={row[col]} />
                   </td>
                 ))}
+                <td className="border border-gray-100 px-2 py-2 text-center">
+                  <RowActionsMenu
+                    onEdit={() => setEditRow(row)}
+                    onDelete={() => setDeleteRow(row)}
+                  />
+                </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={flatColumns.length} className="px-4 py-12 text-center text-sm text-body">
+                <td colSpan={flatColumns.length + 1} className="px-4 py-12 text-center text-sm text-body">
                   No rows match the current filters.
                 </td>
               </tr>
@@ -225,6 +288,31 @@ export default function SopSheet({ sheet, title }) {
           />
         )}
       </div>
+
+      {showAdd && enableAddRow && (
+        <AddRowModal
+          columns={flatColumns}
+          labels={columnLabels}
+          examples={data[0]}
+          onClose={() => setShowAdd(false)}
+          onSubmit={addRow}
+          groups={sheet.groups}
+        />
+      )}
+      {editRow && (
+        <AddRowModal
+          columns={flatColumns}
+          labels={columnLabels}
+          examples={data[0]}
+          initial={editRow}
+          onClose={() => setEditRow(null)}
+          onSubmit={saveEdit}
+          groups={sheet.groups}
+        />
+      )}
+      {deleteRow && (
+        <DeleteRowModal onClose={() => setDeleteRow(null)} onConfirm={confirmDelete} />
+      )}
     </section>
   )
 }

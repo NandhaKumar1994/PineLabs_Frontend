@@ -3,7 +3,20 @@
 // next 3 digits = Merchant Prefix. The helpdesk user searches with those
 // 9 digits to find the matching Issuer.
 // Columns are derived dynamically from these keys (in order).
-export const binSeries = [
+// `id` is internal. `updatedBy` + `updatedAt` power the Updated By column.
+
+const editors = ['Ravi Kumar', 'Neha Shah', 'Arjun Rao', 'Priya Das', 'Dev Menon', 'Karthik Nair']
+
+const pad = (n) => String(n).padStart(2, '0')
+
+const withAudit = (row, i) => ({
+  id: `bin-${i}`,
+  ...row,
+  updatedBy: editors[i % editors.length],
+  updatedAt: `2026-09-${pad(1 + (i % 14))} ${pad(9 + (i % 8))}:${pad((i * 11) % 60)}`,
+})
+
+const seed = [
   { issuer: 'HDFC Bank', cardProgramGroupName: 'HDFC Regalia', binIin: '401288', merchantPrefix: '001' },
   { issuer: 'ICICI Bank', cardProgramGroupName: 'ICICI Coral', binIin: '552461', merchantPrefix: '004' },
   { issuer: 'Axis Bank', cardProgramGroupName: 'Axis Magnus', binIin: '340000', merchantPrefix: '002' },
@@ -17,8 +30,6 @@ export const binSeries = [
   { issuer: 'HDFC Bank', cardProgramGroupName: 'HDFC Millennia', binIin: '401288', merchantPrefix: '021' },
 ]
 
-// Scale up to a realistic volume for the demo. Generates additional rows
-// with deterministic values so search/pagination can be stress-tested.
 const issuerPool = [
   'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'State Bank of India', 'Kotak Mahindra',
   'Yes Bank', 'Punjab National Bank', 'IndusInd Bank', 'IDFC First Bank', 'Citi Bank',
@@ -37,4 +48,14 @@ const bulkBins = Array.from({ length: 600 }, (_, i) => {
   }
 })
 
-binSeries.push(...bulkBins)
+export const binSeries = [...seed, ...bulkBins].map(withAudit)
+
+export const CURRENT_USER = 'Admin'
+
+export function stampNow() {
+  const d = new Date()
+  return {
+    updatedBy: CURRENT_USER,
+    updatedAt: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  }
+}
