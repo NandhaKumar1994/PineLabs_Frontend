@@ -19,7 +19,7 @@ const titles = {
 }
 
 export default function Dashboard() {
-  const [active, setActive] = useState('bin')
+  const [active, setActive] = useState('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const meta = titles[active]
 

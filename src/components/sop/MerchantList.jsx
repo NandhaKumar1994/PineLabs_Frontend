@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
-import { Search, Store, ChevronRight, FileSpreadsheet, Zap, ArrowRight } from 'lucide-react'
-import { merchants } from '../../data/sopData'
+import { Search, Store, ChevronRight, FileSpreadsheet, Zap, ArrowRight, Upload, User } from 'lucide-react'
+import { merchants as allMerchants, createMerchant } from '../../data/sopData'
+import { stampEditor, formatDateTime } from '../../data/users'
 import { useDebounce } from '../../hooks/useDebounce'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../common/Pagination'
 import Combobox from '../common/Combobox'
 import { useTheme } from '../../theme/ThemeContext'
+import UploadSheetModal from '../dashboard/UploadSheetModal'
+import { identityValue } from '../../utils/csv'
 
 const classificationOptions = [
   'Blocking',
@@ -44,12 +47,19 @@ function resolveSubsheetKey(text, merchant) {
   return found ? found.key : null
 }
 
-export default function MerchantList({ onSelect }) {
+const merchantColumns = ['name', 'classification']
+const merchantLabels = {
+  name: 'Merchant',
+  classification: 'Classification',
+}
+
+export default function MerchantList({ merchants = allMerchants, onMerchantsChange, onSelect }) {
   const { theme } = useTheme()
   const t2 = theme === 'theme2'
   const [query, setQuery] = useState('')
   const [issuer, setIssuer] = useState('')
   const [classification, setClassification] = useState('')
+  const [showUpload, setShowUpload] = useState(false)
 
   const debouncedQuery = useDebounce(query, 200)
 
@@ -61,11 +71,11 @@ export default function MerchantList({ onSelect }) {
         m.name.toLowerCase().includes(q) ||
         m.classification.toLowerCase().includes(q)
     )
-  }, [debouncedQuery])
+  }, [debouncedQuery, merchants])
 
   const pager = usePagination(filtered, 24)
 
-  const merchantNames = useMemo(() => merchants.map((m) => m.name), [])
+  const merchantNames = useMemo(() => merchants.map((m) => m.name), [merchants])
 
   const handleGo = (e) => {
     e.preventDefault()
@@ -80,6 +90,40 @@ export default function MerchantList({ onSelect }) {
   const matchedMerchant = merchants.find(
     (m) => m.name.toLowerCase() === issuer.trim().toLowerCase()
   )
+
+  const updateExisting = (updates) => {
+    const queues = new Map()
+    updates.forEach((incoming) => {
+      const key = identityValue(incoming, 'name')
+      if (!key) return
+      if (!queues.has(key)) queues.set(key, [])
+      queues.get(key).push(incoming)
+    })
+    onMerchantsChange?.((prev) =>
+      prev.map((merchant) => {
+        const queue = queues.get(identityValue(merchant, 'name'))
+        if (!queue?.length) return merchant
+        const incoming = queue.shift()
+        const nextClass = String(incoming.classification || '').trim()
+        return nextClass ? { ...merchant, classification: nextClass, ...stampEditor() } : merchant
+      })
+    )
+    setQuery('')
+  }
+
+  const addMerchants = (incoming) => {
+    const created = incoming
+      .filter((row) => String(row.name || '').trim())
+      .map((row) =>
+        createMerchant({
+          name: row.name,
+          classification: row.classification,
+        })
+      )
+    if (!created.length) return
+    onMerchantsChange?.((prev) => [...created, ...prev])
+    setQuery('')
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -140,21 +184,31 @@ export default function MerchantList({ onSelect }) {
       </form>
 
       {/* browse merchants */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-bold text-heading">All Merchants</h2>
           <p className="text-xs text-body">
             {filtered.length} merchant workbooks
           </p>
         </div>
-        <div className="relative w-64">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search merchant…"
-            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
-          />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowUpload(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90"
+          >
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline">Upload Sheet</span>
+          </button>
+          <div className="relative w-52 sm:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search merchant…"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+          </div>
         </div>
       </div>
 
@@ -179,6 +233,17 @@ export default function MerchantList({ onSelect }) {
                 <span className="rounded-full bg-grey-light px-2 py-0.5 text-xs font-medium text-body">
                   {m.classification}
                 </span>
+                {m.updatedBy && (
+                  <span className="min-w-0 text-xs text-body">
+                    <span className="flex items-center gap-1">
+                      <User className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{m.updatedBy}</span>
+                    </span>
+                    {m.updatedAt && (
+                      <span className="mt-0.5 block truncate">{formatDateTime(m.updatedAt)}</span>
+                    )}
+                  </span>
+                )}
                 <span className="flex items-center gap-1 text-xs text-body">
                   <FileSpreadsheet className="h-3 w-3" />
                   {m.subsheets.length} sheets
@@ -209,6 +274,17 @@ export default function MerchantList({ onSelect }) {
                       {m.subsheets.length} SOP sheets
                     </span>
                   </div>
+                  {m.updatedBy && (
+                    <div className="mt-1 text-xs text-body">
+                      <p className="flex items-center gap-1">
+                        <User className="h-3 w-3 shrink-0" />
+                        Edited by <span className="font-medium text-heading">{m.updatedBy}</span>
+                      </p>
+                      {m.updatedAt && (
+                        <p className="mt-0.5">{formatDateTime(m.updatedAt)}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <ChevronRight className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-primary" />
               </button>
@@ -231,6 +307,21 @@ export default function MerchantList({ onSelect }) {
             label="merchants"
           />
         </div>
+      )}
+
+      {showUpload && (
+        <UploadSheetModal
+          columns={merchantColumns}
+          labels={merchantLabels}
+          existingRows={merchants}
+          identityField="name"
+          entityLabel="merchant"
+          existingHint="Existing merchant cards are identified by merchant name and updated in place."
+          newHint="New merchants are added at the top of this list."
+          onClose={() => setShowUpload(false)}
+          onUpdateExisting={updateExisting}
+          onAddNew={addMerchants}
+        />
       )}
     </div>
   )

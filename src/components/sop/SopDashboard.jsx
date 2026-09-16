@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import MerchantList from './MerchantList'
 import MerchantSop from './MerchantSop'
+import { merchants as initialMerchants } from '../../data/sopData'
 
 export default function SopDashboard() {
   const [selected, setSelected] = useState(null)
   const [initialKey, setInitialKey] = useState(null)
+  const [merchantData, setMerchantData] = useState(() => [...initialMerchants])
 
   const handleSelect = (merchant, subsheetKey = null) => {
-    setSelected(merchant)
+    const live = merchantData.find((m) => m.id === merchant.id) || merchant
+    setSelected(live)
     setInitialKey(subsheetKey)
   }
 
@@ -16,8 +19,16 @@ export default function SopDashboard() {
       merchant={selected}
       initialKey={initialKey}
       onBack={() => setSelected(null)}
+      onMerchantChange={(next) => {
+        setMerchantData((prev) => prev.map((m) => (m.id === next.id ? next : m)))
+        setSelected(next)
+      }}
     />
   ) : (
-    <MerchantList onSelect={handleSelect} />
+    <MerchantList
+      merchants={merchantData}
+      onMerchantsChange={setMerchantData}
+      onSelect={handleSelect}
+    />
   )
 }

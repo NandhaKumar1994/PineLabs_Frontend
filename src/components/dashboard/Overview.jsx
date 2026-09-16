@@ -1,11 +1,24 @@
-import { CreditCard, Store, Users, History, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { useState } from 'react'
+import {
+  CreditCard,
+  Store,
+  Users,
+  History,
+  TrendingUp,
+  ArrowUpRight,
+  ArrowDownRight,
+  Maximize2,
+} from 'lucide-react'
 import BarChart from '../charts/BarChart'
 import DonutChart from '../charts/DonutChart'
 import { binSeries } from '../../data/binSeries'
 import { merchants } from '../../data/sopData'
 import { users } from '../../data/users'
 import { revisions } from '../../data/revisions'
+import { recentTickets, statusBadge } from '../../data/tickets'
 import { useTheme } from '../../theme/ThemeContext'
+import TicketsModal from './TicketsModal'
+import StatusReasonInfo from './StatusReasonInfo'
 
 const kpis = [
   { icon: CreditCard, label: 'BIN Records', value: binSeries.length.toLocaleString(), delta: '+12%', up: true },
@@ -43,7 +56,6 @@ export default function Overview() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
-      {/* KPI strip — compact, single row */}
       <div className="grid shrink-0 grid-cols-2 divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white sm:grid-cols-4 sm:divide-x sm:divide-y-0">
         {kpis.map(({ icon: Icon, label, value, delta, up }) => (
           <div key={label} className="flex items-center gap-3 px-4 py-3">
@@ -68,7 +80,6 @@ export default function Overview() {
         ))}
       </div>
 
-      {/* charts row */}
       <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:col-span-2">
           <div className="mb-2 flex items-center justify-between">
@@ -93,7 +104,6 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* tables row */}
       <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="shrink-0 border-b border-gray-100 px-4 py-2.5">
@@ -150,16 +160,15 @@ export default function Overview() {
           </div>
         </div>
       </div>
+
+      <TicketStatusCard />
     </div>
   )
 }
 
-/* Theme 2 dashboard layout: elevated KPI cards (big numbers), charts with
-   donut on the left + bar on the right, then full-width stacked panels. */
 function OverviewT2() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-0.5">
-      {/* KPI cards — separate elevated blocks with big numbers */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {kpis.map(({ icon: Icon, label, value, delta, up }) => (
           <div key={label} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -182,7 +191,6 @@ function OverviewT2() {
         ))}
       </div>
 
-      {/* charts — donut left, bar right (opposite of Theme 1) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="flex flex-col rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-bold text-heading">SOP by Classification</h3>
@@ -206,7 +214,6 @@ function OverviewT2() {
         </div>
       </div>
 
-      {/* full-width stacked panels */}
       <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-5 py-3">
           <h3 className="text-sm font-bold text-heading">Top Issuers by Volume</h3>
@@ -245,6 +252,76 @@ function OverviewT2() {
           ))}
         </ul>
       </div>
+
+      <TicketStatusCard elevated />
     </div>
+  )
+}
+
+function TicketStatusCard({ elevated = false }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <div
+        className={`flex shrink-0 flex-col overflow-hidden border border-gray-200 bg-white shadow-sm ${
+          elevated ? 'rounded-lg' : 'rounded-xl'
+        }`}
+      >
+        <div
+          className={`flex shrink-0 items-center justify-between border-b border-gray-100 ${
+            elevated ? 'px-5 py-3' : 'px-4 py-2.5'
+          }`}
+        >
+          <h3 className="text-sm font-bold text-heading">Tickets by Status</h3>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="Open full tickets table"
+            title="Open full table"
+            className="grid h-8 w-8 place-items-center rounded-lg text-body transition hover:bg-grey-light hover:text-heading"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                {['Ticket', 'Subject', 'Issuer', 'Status', 'Updated', ''].map((col, i) => (
+                  <th
+                    key={col || `info-${i}`}
+                    className="whitespace-nowrap px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 sm:px-5"
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {recentTickets.map((row) => (
+                <tr key={row.id} className="hover:bg-primary/[0.03]">
+                  <td className="whitespace-nowrap px-4 py-2.5 font-semibold text-heading sm:px-5">{row.id}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-heading sm:px-5">{row.subject}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-body sm:px-5">{row.issuer}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 sm:px-5">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadge[row.status]}`}
+                    >
+                      {row.status}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-xs text-body sm:px-5">{row.updated}</td>
+                  <td className="w-10 px-3 py-2.5 text-right sm:px-4">
+                    <StatusReasonInfo status={row.status} reason={row.reason} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {open && <TicketsModal onClose={() => setOpen(false)} />}
+    </>
   )
 }

@@ -9,3 +9,29 @@ export const users = [
   { id: 'u7', name: 'Priya Das', email: 'priya.das@pinelabs.in', role: 'Support Lead', status: 'Active', lastActive: '25 min ago' },
   { id: 'u8', name: 'Imran Sheikh', email: 'imran.sheikh@pinelabs.in', role: 'Support Agent', status: 'Invited', lastActive: '—' },
 ]
+
+export const CURRENT_USER = 'Admin'
+
+const pad = (n) => String(n).padStart(2, '0')
+
+export function formatDateTime(value) {
+  if (!value) return ''
+  const [date, time] = String(value).trim().split(/\s+/)
+  if (!time) return date
+  const [hStr, mStr = '00'] = time.split(':')
+  let hour = Number(hStr)
+  if (Number.isNaN(hour)) return String(value)
+  const minute = pad(Number.parseInt(mStr, 10) || 0)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  hour = hour % 12
+  if (hour === 0) hour = 12
+  return `${date} | ${pad(hour)}:${minute} ${ampm}`
+}
+
+export function stampEditor() {
+  const d = new Date()
+  return {
+    updatedBy: CURRENT_USER,
+    updatedAt: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  }
+}

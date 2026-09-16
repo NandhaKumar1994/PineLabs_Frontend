@@ -5,6 +5,8 @@
 // dynamically from each subsheet's `groups` + `rows`.
 // Each issuer intentionally has DIFFERENT group/column structures and rows.
 
+import { stampEditor } from './users'
+
 const sheet = (key, name, groups, rows) => ({ key, name, groups, rows })
 
 // Shared Escalation Matrix used across all merchants for cross-validation.
@@ -212,6 +214,13 @@ const genericSheets = (label, domain) => [
  * Rows are also scaled up so tables are stress-tested for the demo.
  * ------------------------------------------------------------------ */
 const classifications = ['Digital Gift Card', 'Physical Gift Card', 'Corporate Gifting', 'Reward Card']
+const editors = ['Ravi Kumar', 'Neha Shah', 'Arjun Rao', 'Priya Das', 'Dev Menon', 'Karthik Nair']
+
+const pad = (n) => String(n).padStart(2, '0')
+const editorStamp = (i) => ({
+  updatedBy: editors[i % editors.length],
+  updatedAt: `2026-09-${pad(1 + (i % 14))} ${pad(9 + (i % 8))}:${pad((i * 11) % 60)}`,
+})
 const cardStatuses = ['Created', 'Purchased', 'Activated', 'Deactivated', 'Expired']
 const balances = ['NA', 'Zero', '>Zero']
 const requesters = ['Brand POC', 'CES', 'All others apart from Brand POC']
@@ -275,16 +284,16 @@ function bulkSheets(label, domain, seed, rowCount) {
 
 // Curated issuers (mirroring BIN Series) with hand-built distinct sheets.
 const curated = [
-  { id: 'hdfc', name: 'HDFC Bank', classification: 'Digital Gift Card', subsheets: hdfcSheets },
-  { id: 'icici', name: 'ICICI Bank', classification: 'Physical Gift Card', subsheets: iciciSheets },
-  { id: 'axis', name: 'Axis Bank', classification: 'Corporate Gifting', subsheets: axisSheets },
-  { id: 'sbi', name: 'State Bank of India', classification: 'Digital Gift Card', subsheets: genericSheets('SBI', 'sbi.co.in') },
-  { id: 'kotak', name: 'Kotak Mahindra', classification: 'Reward Card', subsheets: genericSheets('Kotak', 'kotak.com') },
-  { id: 'yes', name: 'Yes Bank', classification: 'Physical Gift Card', subsheets: genericSheets('Yes Bank', 'yesbank.in') },
-  { id: 'pnb', name: 'Punjab National Bank', classification: 'Corporate Gifting', subsheets: genericSheets('PNB', 'pnb.co.in') },
-  { id: 'indusind', name: 'IndusInd Bank', classification: 'Reward Card', subsheets: genericSheets('IndusInd', 'indusind.com') },
-  { id: 'idfc', name: 'IDFC First Bank', classification: 'Digital Gift Card', subsheets: genericSheets('IDFC First', 'idfcfirstbank.com') },
-  { id: 'citi', name: 'Citi Bank', classification: 'Corporate Gifting', subsheets: genericSheets('Citi', 'citi.com') },
+  { id: 'hdfc', name: 'HDFC Bank', classification: 'Digital Gift Card', ...editorStamp(0), subsheets: hdfcSheets },
+  { id: 'icici', name: 'ICICI Bank', classification: 'Physical Gift Card', ...editorStamp(1), subsheets: iciciSheets },
+  { id: 'axis', name: 'Axis Bank', classification: 'Corporate Gifting', ...editorStamp(2), subsheets: axisSheets },
+  { id: 'sbi', name: 'State Bank of India', classification: 'Digital Gift Card', ...editorStamp(3), subsheets: genericSheets('SBI', 'sbi.co.in') },
+  { id: 'kotak', name: 'Kotak Mahindra', classification: 'Reward Card', ...editorStamp(4), subsheets: genericSheets('Kotak', 'kotak.com') },
+  { id: 'yes', name: 'Yes Bank', classification: 'Physical Gift Card', ...editorStamp(5), subsheets: genericSheets('Yes Bank', 'yesbank.in') },
+  { id: 'pnb', name: 'Punjab National Bank', classification: 'Corporate Gifting', ...editorStamp(6), subsheets: genericSheets('PNB', 'pnb.co.in') },
+  { id: 'indusind', name: 'IndusInd Bank', classification: 'Reward Card', ...editorStamp(7), subsheets: genericSheets('IndusInd', 'indusind.com') },
+  { id: 'idfc', name: 'IDFC First Bank', classification: 'Digital Gift Card', ...editorStamp(8), subsheets: genericSheets('IDFC First', 'idfcfirstbank.com') },
+  { id: 'citi', name: 'Citi Bank', classification: 'Corporate Gifting', ...editorStamp(9), subsheets: genericSheets('Citi', 'citi.com') },
 ]
 
 // Generate ~500 additional issuers to simulate real volume.
@@ -297,9 +306,22 @@ const bulk = Array.from({ length: BULK_COUNT }, (_, i) => {
     id: `issuer-${n}`,
     name,
     classification: classifications[n % classifications.length],
+    ...editorStamp(n),
     // vary row counts so some sheets are big (stress test)
     subsheets: bulkSheets(name, domain, n, 40 + (n % 12) * 30),
   }
 })
 
 export const merchants = [...curated, ...bulk]
+
+export function createMerchant({ name, classification }) {
+  const label = String(name || '').trim()
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'merchant'
+  return {
+    id: `${slug}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: label,
+    classification: String(classification || 'Digital Gift Card').trim(),
+    ...stampEditor(),
+    subsheets: genericSheets(label, `${slug}.example.in`),
+  }
+}

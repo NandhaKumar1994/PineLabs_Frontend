@@ -46,11 +46,11 @@ export default function SopValidateModal({ merchant, sheets, onClose }) {
 
         {/* body scrolls; action sheet on top, POC + Escalation in one row below */}
         <div className="flex-1 space-y-4 overflow-y-auto bg-grey-bg p-4">
-          {action && <SopSheet sheet={action} title={action.name} />}
+          {action && <SopSheet sheet={action} title={action.name} enableAddRow={false} />}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {refs.map((s) => (
-              <SopSheet key={s.key} sheet={s} title={s.name} />
+              <SopSheet key={s.key} sheet={s} title={s.name} enableAddRow={false} />
             ))}
           </div>
         </div>
