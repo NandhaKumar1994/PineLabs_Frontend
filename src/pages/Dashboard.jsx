@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTheme } from '../theme/ThemeContext'
+import { useRole } from '../theme/RoleContext'
 import Sidebar from '../components/dashboard/Sidebar'
 import Header from '../components/dashboard/Header'
 import StatCards from '../components/dashboard/StatCards'
@@ -13,7 +14,7 @@ import Overview from '../components/dashboard/Overview'
 const titles = {
   dashboard: { title: 'Dashboard', subtitle: 'Overview of your helpdesk automation data' },
   bin: { title: 'BIN Series', subtitle: 'Look up card issuers and manage BIN ranges' },
-  sop: { title: 'SOP Dashboard', subtitle: 'Merchant standard operating procedures by classification' },
+  sop: { title: 'SOP Dashboard', subtitle: 'Issuer standard operating procedures by instance & classification' },
   users: { title: 'User Management', subtitle: 'Manage users, roles and access' },
   history: { title: 'Revision History', subtitle: 'Audit trail of all changes' },
 }
@@ -21,6 +22,15 @@ const titles = {
 export default function Dashboard() {
   const [active, setActive] = useState('dashboard')
   const [collapsed, setCollapsed] = useState(false)
+  const { perms } = useRole()
+
+  // If the current view is not permitted for the selected role, redirect out.
+  useEffect(() => {
+    if (active === 'users' && !perms.canManageUsers) setActive('dashboard')
+    if (active === 'history' && !perms.canViewHistory) setActive('dashboard')
+    if (active === 'bin' && !perms.canViewBin) setActive('dashboard')
+  }, [active, perms])
+
   const meta = titles[active]
 
   return (

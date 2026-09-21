@@ -10,14 +10,14 @@ export const ticketStatus = [
 ]
 
 const issuers = [
-  'HDFC Bank',
-  'ICICI Bank',
-  'Axis Bank',
-  'State Bank of India',
-  'Kotak Mahindra',
-  'Yes Bank',
-  'IDFC First Bank',
-  'Citi Bank',
+  'Aurora Retail',
+  'Bluewave Stores',
+  'Cedar Mart',
+  'Delta Goods',
+  'Everest Retail',
+  'Fusion Mart',
+  'Ivory Mart',
+  'Jade Stores',
 ]
 
 const agents = ['Ravi Kumar', 'Neha Shah', 'Arjun Rao', 'Priya Das', 'Dev Menon', 'Karthik Nair']

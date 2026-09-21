@@ -71,24 +71,28 @@ export default function RowActionsMenu({ onEdit, onDelete }) {
               transform: pos.flip ? 'translateY(-100%)' : undefined,
             }}
           >
-            <button
-              type="button"
-              role="menuitem"
-              onClick={pick(onEdit)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-heading transition hover:bg-grey-light"
-            >
-              <Pencil className="h-3.5 w-3.5 text-body" />
-              Edit
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={pick(onDelete)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </button>
+            {onEdit && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={pick(onEdit)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-heading transition hover:bg-grey-light"
+              >
+                <Pencil className="h-3.5 w-3.5 text-body" />
+                Edit
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={pick(onDelete)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            )}
           </div>,
           document.body
         )}

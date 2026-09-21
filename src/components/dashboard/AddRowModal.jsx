@@ -21,6 +21,7 @@ export default function AddRowModal({
   examples,
   initial,
   groups,
+  selectFields = [],
   onClose,
   onSubmit,
   title,
@@ -30,10 +31,11 @@ export default function AddRowModal({
   const isEdit = Boolean(initial)
   const empty = useMemo(
     () =>
-      Object.fromEntries(
-        columns.map((col) => [col, initial?.[col] != null ? String(initial[col]) : ''])
-      ),
-    [columns, initial]
+      Object.fromEntries([
+        ...columns.map((col) => [col, initial?.[col] != null ? String(initial[col]) : '']),
+        ...selectFields.map((f) => [f.name, initial?.[f.name] != null ? String(initial[f.name]) : '']),
+      ]),
+    [columns, initial, selectFields]
   )
   const [form, setForm] = useState(empty)
 
@@ -45,14 +47,18 @@ export default function AddRowModal({
 
   const set = (col) => (e) => setForm((f) => ({ ...f, [col]: e.target.value }))
 
-  const valid = columns.every((col) => String(form[col] ?? '').trim())
+  const requiredSelects = selectFields.filter((f) => f.required !== false)
+  const valid =
+    columns.every((col) => String(form[col] ?? '').trim()) &&
+    requiredSelects.every((f) => String(form[f.name] ?? '').trim())
 
   const submit = (e) => {
     e.preventDefault()
     if (!valid) return
-    const row = Object.fromEntries(
-      columns.map((col) => [col, String(form[col]).trim()])
-    )
+    const row = Object.fromEntries([
+      ...columns.map((col) => [col, String(form[col]).trim()]),
+      ...selectFields.map((f) => [f.name, String(form[f.name] ?? '').trim()]),
+    ])
     onSubmit(row)
     onClose()
   }
@@ -114,6 +120,32 @@ export default function AddRowModal({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          {selectFields.length > 0 && (
+            <div className="space-y-3">
+              {selectFields.map((f) => (
+                <label key={f.name} className="block">
+                  <span className="mb-1 block text-xs font-semibold text-heading">
+                    {f.label}
+                    {f.required !== false && <span className="text-red-500"> *</span>}
+                  </span>
+                  <select
+                    value={form[f.name] ?? ''}
+                    onChange={set(f.name)}
+                    className={inputCls}
+                  >
+                    <option value="" disabled>
+                      {f.placeholder || `Select ${f.label.toLowerCase()}`}
+                    </option>
+                    {f.options.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+          )}
           {groups?.length
             ? groups.map((g) => (
                 <div key={g.group} className="space-y-3">

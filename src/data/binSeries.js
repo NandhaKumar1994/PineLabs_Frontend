@@ -17,24 +17,24 @@ const withAudit = (row, i) => ({
 })
 
 const seed = [
-  { issuer: 'HDFC Bank', cardProgramGroupName: 'HDFC Regalia', binIin: '401288', merchantPrefix: '001' },
-  { issuer: 'ICICI Bank', cardProgramGroupName: 'ICICI Coral', binIin: '552461', merchantPrefix: '004' },
-  { issuer: 'Axis Bank', cardProgramGroupName: 'Axis Magnus', binIin: '340000', merchantPrefix: '002' },
-  { issuer: 'State Bank of India', cardProgramGroupName: 'SBI SimplyCLICK', binIin: '607469', merchantPrefix: '007' },
-  { issuer: 'Kotak Mahindra', cardProgramGroupName: 'Kotak League', binIin: '453218', merchantPrefix: '009' },
-  { issuer: 'Yes Bank', cardProgramGroupName: 'Yes Prosperity', binIin: '512345', merchantPrefix: '011' },
-  { issuer: 'Punjab National Bank', cardProgramGroupName: 'PNB Rakshak', binIin: '655012', merchantPrefix: '003' },
-  { issuer: 'IndusInd Bank', cardProgramGroupName: 'Indus Pinnacle', binIin: '486712', merchantPrefix: '015' },
-  { issuer: 'IDFC First Bank', cardProgramGroupName: 'IDFC Wealth', binIin: '533012', merchantPrefix: '006' },
-  { issuer: 'Citi Bank', cardProgramGroupName: 'Citi Rewards', binIin: '374512', merchantPrefix: '008' },
-  { issuer: 'HDFC Bank', cardProgramGroupName: 'HDFC Millennia', binIin: '401288', merchantPrefix: '021' },
+  { issuer: 'Aurora Retail', cardProgramGroupName: 'Aurora Elite', binIin: '401288', merchantPrefix: '001' },
+  { issuer: 'Bluewave Stores', cardProgramGroupName: 'Bluewave Plus', binIin: '552461', merchantPrefix: '004' },
+  { issuer: 'Cedar Mart', cardProgramGroupName: 'Cedar Prime', binIin: '340000', merchantPrefix: '002' },
+  { issuer: 'Delta Goods', cardProgramGroupName: 'Delta Select', binIin: '607469', merchantPrefix: '007' },
+  { issuer: 'Everest Retail', cardProgramGroupName: 'Everest League', binIin: '453218', merchantPrefix: '009' },
+  { issuer: 'Fusion Mart', cardProgramGroupName: 'Fusion Prosper', binIin: '512345', merchantPrefix: '011' },
+  { issuer: 'Granite Stores', cardProgramGroupName: 'Granite Guard', binIin: '655012', merchantPrefix: '003' },
+  { issuer: 'Horizon Retail', cardProgramGroupName: 'Horizon Pinnacle', binIin: '486712', merchantPrefix: '015' },
+  { issuer: 'Ivory Mart', cardProgramGroupName: 'Ivory Wealth', binIin: '533012', merchantPrefix: '006' },
+  { issuer: 'Jade Stores', cardProgramGroupName: 'Jade Rewards', binIin: '374512', merchantPrefix: '008' },
+  { issuer: 'Aurora Retail', cardProgramGroupName: 'Aurora Everyday', binIin: '401288', merchantPrefix: '021' },
 ]
 
 const issuerPool = [
-  'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'State Bank of India', 'Kotak Mahindra',
-  'Yes Bank', 'Punjab National Bank', 'IndusInd Bank', 'IDFC First Bank', 'Citi Bank',
+  'Aurora Retail', 'Bluewave Stores', 'Cedar Mart', 'Delta Goods', 'Everest Retail',
+  'Fusion Mart', 'Granite Stores', 'Horizon Retail', 'Ivory Mart', 'Jade Stores',
 ]
-const programSuffix = ['Regalia', 'Coral', 'Magnus', 'SimplyCLICK', 'League', 'Prosperity', 'Rakshak', 'Pinnacle', 'Wealth', 'Rewards', 'Platinum', 'Signature']
+const programSuffix = ['Elite', 'Plus', 'Prime', 'Select', 'League', 'Prosper', 'Guard', 'Pinnacle', 'Wealth', 'Rewards', 'Platinum', 'Signature']
 
 const bulkBins = Array.from({ length: 600 }, (_, i) => {
   const issuer = issuerPool[i % issuerPool.length]

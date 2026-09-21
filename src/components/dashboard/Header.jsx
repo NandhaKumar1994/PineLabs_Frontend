@@ -1,8 +1,10 @@
-import { Search, Bell, ChevronDown, HelpCircle } from 'lucide-react'
+import { Search, Bell, ChevronDown, HelpCircle, UserCog } from 'lucide-react'
 import { useTheme } from '../../theme/ThemeContext'
+import { useRole, ROLES } from '../../theme/RoleContext'
 
 export default function Header({ title, subtitle }) {
   const { theme } = useTheme()
+  const { role, setRole } = useRole()
   const t2 = theme === 'theme2'
   return (
     <header
@@ -42,18 +44,53 @@ export default function Header({ title, subtitle }) {
           <span className={`absolute right-2 top-2 h-2 w-2 rounded-full ${t2 ? 'bg-emerald-300 ring-2 ring-primary' : 'bg-primary ring-2 ring-white'}`} />
         </button>
 
+        {/* Role switcher — drives permissions across the app */}
+        <div
+          className={`relative flex items-center gap-2 rounded-lg border px-3 py-1.5 transition ${
+            t2
+              ? 'border-white/20 bg-white/10 hover:bg-white/15'
+              : 'border-gray-200 bg-white hover:border-primary/40'
+          }`}
+        >
+          <span className={`grid h-6 w-6 place-items-center rounded-md ${t2 ? 'bg-white/15 text-primary-foreground' : 'bg-primary/10 text-primary'}`}>
+            <UserCog className="h-3.5 w-3.5" />
+          </span>
+          <div className="hidden leading-tight sm:block">
+            <span className={`block text-[10px] uppercase tracking-wide ${t2 ? 'text-primary-foreground/50' : 'text-gray-400'}`}>
+              Role
+            </span>
+            <span className={`block text-sm font-semibold ${t2 ? 'text-primary-foreground' : 'text-heading'}`}>
+              {role}
+            </span>
+          </div>
+          <ChevronDown className={`h-4 w-4 ${t2 ? 'text-primary-foreground/60' : 'text-gray-400'}`} />
+          {/* transparent native select overlays the whole control for accessibility */}
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            aria-label="Switch role"
+            title="Switch role"
+            className="absolute inset-0 cursor-pointer opacity-0"
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <span className={`mx-1 h-8 w-px ${t2 ? 'bg-white/20' : 'bg-gray-200'}`} />
 
-        <button className={`flex items-center gap-2 rounded-lg py-1 pl-1 pr-2 transition ${iconBtn(t2)}`}>
+        <div className="flex items-center gap-2 py-1 pl-1 pr-2">
           <span className={`grid h-8 w-8 place-items-center rounded-full text-xs font-bold ${t2 ? 'bg-white/20 text-primary-foreground' : 'bg-primary text-primary-foreground'}`}>
             AK
           </span>
           <span className="hidden text-left sm:block">
-            <span className={`block text-sm font-semibold leading-tight ${t2 ? 'text-primary-foreground' : 'text-heading'}`}>Admin</span>
-            <span className={`block text-[11px] leading-tight ${t2 ? 'text-primary-foreground/60' : 'text-gray-400'}`}>Support Agent</span>
+            <span className={`block text-sm font-semibold leading-tight ${t2 ? 'text-primary-foreground' : 'text-heading'}`}>Admin User</span>
+            <span className={`block text-[11px] leading-tight ${t2 ? 'text-primary-foreground/60' : 'text-gray-400'}`}>{role}</span>
           </span>
-          <ChevronDown className={`h-4 w-4 ${t2 ? 'text-primary-foreground/60' : 'text-gray-400'}`} />
-        </button>
+        </div>
       </div>
     </header>
   )

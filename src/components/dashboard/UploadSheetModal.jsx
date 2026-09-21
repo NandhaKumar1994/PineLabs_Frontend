@@ -143,9 +143,9 @@ export default function UploadSheetModal({
               <Upload className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-sm font-bold text-heading">Upload Sheet</h2>
+              <h2 className="text-sm font-bold text-heading">Import Data</h2>
               <p className="text-xs text-body">
-                Upload one or more sheets to update existing {entityLabel}s or insert new records
+                Import one or more files to update existing {entityLabel}s or add new records
               </p>
             </div>
           </div>
@@ -162,8 +162,8 @@ export default function UploadSheetModal({
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <div className="flex rounded-lg bg-grey-light p-1">
             {[
-              { id: 'existing', label: 'Existing sheet' },
-              { id: 'new', label: 'New sheet' },
+              { id: 'existing', label: 'Update Existing' },
+              { id: 'new', label: 'Add New' },
             ].map((t) => (
               <button
                 key={t.id}
@@ -228,7 +228,7 @@ export default function UploadSheetModal({
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-heading transition hover:bg-grey-light"
             >
               <Eye className="h-4 w-4 text-body" />
-              View files
+              Review Files
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
                 {files.length}
               </span>
@@ -250,7 +250,7 @@ export default function UploadSheetModal({
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90 disabled:opacity-50"
           >
             <Upload className="h-4 w-4" />
-            {tab === 'existing' ? 'Update existing' : 'Add new sheet'}
+            {tab === 'existing' ? 'Update Records' : 'Import New Records'}
           </button>
         </div>
       </form>
@@ -277,7 +277,7 @@ function FilesPopup({ files, entityLabel, tab, existingKeys, identityField, onRe
       <div className="relative flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-3.5">
           <div>
-            <h3 className="text-sm font-bold text-heading">Uploaded files</h3>
+            <h3 className="text-sm font-bold text-heading">Selected Files</h3>
             <p className="text-xs text-body">
               {files.length} file{files.length === 1 ? '' : 's'} selected
             </p>

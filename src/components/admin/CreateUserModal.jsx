@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react'
 import { X, UserPlus, Search, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { merchants } from '../../data/sopData'
 
-const roles = ['Admin', 'Support Lead', 'Support Agent', 'Auditor']
+const roles = ['Admin', 'SME', 'Automation', 'Viewer']
 
 export default function CreateUserModal({ onClose, onCreate }) {
-  const [form, setForm] = useState({ name: '', email: '', mobile: '', role: 'Support Agent' })
+  const [form, setForm] = useState({ name: '', email: '', mobile: '', role: 'SME' })
   // access: { [merchantId]: Set(subsheetKeys) }
   const [access, setAccess] = useState({})
   const [expanded, setExpanded] = useState(null)
@@ -112,10 +112,10 @@ export default function CreateUserModal({ onClose, onCreate }) {
           {/* merchant + subsheet access */}
           <div>
             <div className="mb-1">
-              <p className="text-sm font-semibold text-heading">Merchant SOP Access</p>
+              <p className="text-sm font-semibold text-heading">Issuer SOP Access</p>
               <p className="text-xs text-body">
-                Select merchants and configure which SOP menus (Block, Activation, POC…) the
-                user sees. <span className="font-medium text-heading">{selectedMerchantCount}</span> merchant(s) enabled.
+                Select issuers and configure which SOP menus (Block, Activation, POC…) the
+                user sees. <span className="font-medium text-heading">{selectedMerchantCount}</span> issuer(s) enabled.
               </p>
             </div>
 
@@ -124,7 +124,7 @@ export default function CreateUserModal({ onClose, onCreate }) {
               <input
                 value={merchantQuery}
                 onChange={(e) => setMerchantQuery(e.target.value)}
-                placeholder="Search merchants…"
+                placeholder="Search issuers…"
                 className="w-full rounded-lg border border-gray-200 bg-grey-light py-1.5 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
               />
             </div>

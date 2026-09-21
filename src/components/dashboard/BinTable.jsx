@@ -7,19 +7,25 @@ import {
   Copy,
   Check,
   X,
+  Columns3,
 } from 'lucide-react'
 import { binSeries, stampNow } from '../../data/binSeries'
+import { instances } from '../../data/sopData'
 import { formatDateTime } from '../../data/users'
 import { useDebounce } from '../../hooks/useDebounce'
 import { usePagination } from '../../hooks/usePagination'
+import { useRole } from '../../theme/RoleContext'
 import Pagination from '../common/Pagination'
 import AddRowModal from './AddRowModal'
 import UploadSheetModal from './UploadSheetModal'
 import RowActionsMenu from './RowActionsMenu'
 import DeleteRowModal from './DeleteRowModal'
+import AddColumnModal from './AddColumnModal'
+import ColumnUploadModal from '../common/ColumnUploadModal'
+import EditableCell from '../common/EditableCell'
 import { downloadCsv, serializeCsv, issuerKey } from '../../utils/csv'
 
-const columnLabels = {
+const baseColumnLabels = {
   issuer: 'Issuer',
   cardProgramGroupName: 'Card Program Group Name',
   binIin: 'BIN / IIN Code',
@@ -40,13 +46,18 @@ const humanize = (key) =>
     .trim()
 
 export default function BinTable() {
+  const { perms } = useRole()
   const [query, setQuery] = useState('')
   const [copied, setCopied] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
+  const [showAddColumn, setShowAddColumn] = useState(false)
   const [editRow, setEditRow] = useState(null)
   const [deleteRow, setDeleteRow] = useState(null)
   const [data, setData] = useState(() => [...binSeries])
+  const [columnLabels, setColumnLabels] = useState(baseColumnLabels)
+  const [customColumns, setCustomColumns] = useState(() => new Set())
+  const [uploadColumn, setUploadColumn] = useState(null)
 
   const allColumns = useMemo(
     () => (data[0] ? Object.keys(data[0]) : Object.keys(columnLabels)),
@@ -74,12 +85,44 @@ export default function BinTable() {
     setQuery('')
   }
 
+  // Add a new column: register its label and bulk-fill every record with the
+  // chosen default value (inserted before the audit fields).
+  const addColumn = (label, defaultValue = '') => {
+    const colKey = label.trim().replace(/\s+/g, ' ')
+    setColumnLabels((prev) => ({ ...prev, [colKey]: label.trim() }))
+    setCustomColumns((prev) => new Set(prev).add(colKey))
+    setData((prev) =>
+      prev.map((row) => {
+        const { updatedBy, updatedAt, ...rest } = row
+        return { ...rest, [colKey]: rest[colKey] ?? defaultValue, updatedBy, updatedAt }
+      })
+    )
+  }
+
+  // Apply uploaded values for a single custom column, matched by Issuer so all
+  // rows belonging to that issuer receive the value.
+  const applyColumnValues = (colKey) => (valueMap) => {
+    setData((prev) =>
+      prev.map((row) => {
+        const key = String(row.issuer ?? '').trim().toLowerCase()
+        return valueMap.has(key) ? { ...row, [colKey]: valueMap.get(key), ...stampNow() } : row
+      })
+    )
+  }
+
   const saveEdit = (next) => {
     if (!editRow) return
     setData((prev) =>
       prev.map((row) => (row.id === editRow.id ? { ...row, ...next, ...stampNow() } : row))
     )
     setEditRow(null)
+  }
+
+  // Inline single-cell edit.
+  const saveCell = (rowId, col, value) => {
+    setData((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, [col]: value, ...stampNow() } : row))
+    )
   }
 
   const confirmDelete = () => {
@@ -167,25 +210,38 @@ export default function BinTable() {
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Export</span>
           </button>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Row</span>
-          </button>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90"
-          >
-            <Upload className="h-4 w-4" />
-            <span className="hidden sm:inline">Upload Sheet</span>
-          </button>
+          {perms.canCreate && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Row</span>
+            </button>
+          )}
+          {perms.canCreate && (
+            <button
+              onClick={() => setShowAddColumn(true)}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
+            >
+              <Columns3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Column</span>
+            </button>
+          )}
+          {perms.canUpload && (
+            <button
+              onClick={() => setShowUpload(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="hidden sm:inline">Import Data</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* table */}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="nice-scroll min-h-0 flex-1 overflow-auto">
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-gray-100 bg-white">
@@ -194,7 +250,19 @@ export default function BinTable() {
                   key={col}
                   className="whitespace-nowrap bg-white px-5 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400"
                 >
-                  {columnLabels[col] || humanize(col)}
+                  <span className="inline-flex items-center gap-1.5">
+                    {columnLabels[col] || humanize(col)}
+                    {customColumns.has(col) && perms.canUpload && (
+                      <button
+                        type="button"
+                        onClick={() => setUploadColumn(col)}
+                        title={`Upload ${columnLabels[col] || col} values from a file`}
+                        className="grid h-5 w-5 place-items-center rounded text-primary transition hover:bg-primary/10"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </span>
                 </th>
               ))}
               <th className="w-12 bg-white px-5 py-2" />
@@ -207,11 +275,18 @@ export default function BinTable() {
                   col === 'issuer' ? (
                     <td key={col} className="whitespace-nowrap px-5 py-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-heading">{row[col]}</span>
+                        <div className="min-w-0 flex-1">
+                          <EditableCell
+                            value={row[col]}
+                            canEdit={perms.canEdit}
+                            onSave={(v) => saveCell(row.id, col, v)}
+                            render={(v) => <span className="font-semibold text-heading">{v}</span>}
+                          />
+                        </div>
                         <button
                           onClick={() => copy(row[col], `${row.id || i}-issuer`)}
                           title="Copy issuer name"
-                          className={`grid h-6 w-6 place-items-center rounded-md transition ${
+                          className={`grid h-6 w-6 shrink-0 place-items-center rounded-md transition ${
                             copied === `${row.id || i}-issuer`
                               ? 'bg-emerald-50 text-emerald-600'
                               : 'text-gray-300 opacity-0 hover:bg-grey-light hover:text-primary group-hover:opacity-100'
@@ -227,9 +302,16 @@ export default function BinTable() {
                     </td>
                   ) : col === 'binIin' || col === 'merchantPrefix' ? (
                     <td key={col} className="whitespace-nowrap px-5 py-2.5">
-                      <span className="rounded bg-grey-light px-2 py-0.5 text-xs font-medium tracking-wide text-heading">
-                        {row[col]}
-                      </span>
+                      <EditableCell
+                        value={row[col]}
+                        canEdit={perms.canEdit}
+                        onSave={(v) => saveCell(row.id, col, v)}
+                        render={(v) => (
+                          <span className="rounded bg-grey-light px-2 py-0.5 text-xs font-medium tracking-wide text-heading">
+                            {v}
+                          </span>
+                        )}
+                      />
                     </td>
                   ) : col === 'updatedBy' ? (
                     <td key={col} className="whitespace-nowrap px-5 py-2.5">
@@ -238,15 +320,21 @@ export default function BinTable() {
                     </td>
                   ) : (
                     <td key={col} className="whitespace-nowrap px-5 py-2.5 text-body">
-                      {row[col]}
+                      <EditableCell
+                        value={row[col]}
+                        canEdit={perms.canEdit}
+                        onSave={(v) => saveCell(row.id, col, v)}
+                      />
                     </td>
                   )
                 )}
                 <td className="px-5 py-2.5 text-right">
-                  <RowActionsMenu
-                    onEdit={() => setEditRow(row)}
-                    onDelete={() => setDeleteRow(row)}
-                  />
+                  {(perms.canEdit || perms.canDelete) && (
+                    <RowActionsMenu
+                      onEdit={perms.canEdit ? () => setEditRow(row) : undefined}
+                      onDelete={perms.canDelete ? () => setDeleteRow(row) : undefined}
+                    />
+                  )}
                 </td>
               </tr>
             ))}
@@ -284,6 +372,14 @@ export default function BinTable() {
           columns={formColumns}
           labels={columnLabels}
           examples={data[0]}
+          selectFields={[
+            {
+              name: 'instance',
+              label: 'Instance',
+              options: instances.map((i) => i.name),
+              placeholder: 'Select an instance',
+            },
+          ]}
           onClose={() => setShowAdd(false)}
           onSubmit={addRow}
         />
@@ -302,6 +398,23 @@ export default function BinTable() {
         <DeleteRowModal
           onClose={() => setDeleteRow(null)}
           onConfirm={confirmDelete}
+        />
+      )}
+      {showAddColumn && (
+        <AddColumnModal
+          existingLabels={columns.map((c) => columnLabels[c] || humanize(c))}
+          rowCount={data.length}
+          onClose={() => setShowAddColumn(false)}
+          onAdd={addColumn}
+        />
+      )}
+      {uploadColumn && (
+        <ColumnUploadModal
+          column={columnLabels[uploadColumn] || humanize(uploadColumn)}
+          keyLabel="Issuer"
+          sampleKeys={[...new Set(data.map((r) => r.issuer).filter(Boolean))].slice(0, 3)}
+          onClose={() => setUploadColumn(null)}
+          onApply={applyColumnValues(uploadColumn)}
         />
       )}
       {showUpload && (

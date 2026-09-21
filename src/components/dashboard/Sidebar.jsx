@@ -10,18 +10,23 @@ import {
   PanelLeft,
 } from 'lucide-react'
 import { useTheme } from '../../theme/ThemeContext'
+import { useRole } from '../../theme/RoleContext'
 
-const nav = [
+const allNav = [
   { icon: LayoutDashboard, label: 'Dashboard', key: 'dashboard' },
-  { icon: CreditCard, label: 'BIN Series', key: 'bin' },
+  { icon: CreditCard, label: 'BIN Series', key: 'bin', requires: 'canViewBin' },
   { icon: ClipboardList, label: 'SOP Dashboard', key: 'sop' },
-  { icon: Users, label: 'User Management', key: 'users' },
-  { icon: History, label: 'Revision History', key: 'history' },
+  { icon: Users, label: 'User Management', key: 'users', requires: 'canManageUsers' },
+  { icon: History, label: 'Revision History', key: 'history', requires: 'canViewHistory' },
 ]
 
 export default function Sidebar({ active, onSelect, collapsed, onToggle }) {
   const { theme } = useTheme()
+  const { perms } = useRole()
   const light = theme === 'theme2'
+
+  // Show only the items the current role is allowed to see.
+  const nav = allNav.filter((item) => !item.requires || perms[item.requires])
 
   // Theme 2: light sidebar with dark text and a tinted active pill.
   // Theme 1: solid primary (dark) sidebar with light text.

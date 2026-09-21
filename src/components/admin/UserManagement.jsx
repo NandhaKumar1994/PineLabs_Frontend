@@ -9,9 +9,9 @@ import CreateUserModal from './CreateUserModal'
 
 const roleTint = {
   Admin: 'bg-primary/10 text-primary',
-  'Support Lead': 'bg-teal-50 text-teal-700',
-  'Support Agent': 'bg-blue-50 text-blue-600',
-  Auditor: 'bg-amber-50 text-amber-700',
+  SME: 'bg-blue-50 text-blue-600',
+  Automation: 'bg-violet-50 text-violet-600',
+  Viewer: 'bg-amber-50 text-amber-700',
 }
 
 const statusTint = {

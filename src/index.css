@@ -111,3 +111,31 @@ body {
   background: rgb(var(--c-grey-light));
   color: rgb(var(--c-body));
 }
+
+/* Styled thin scrollbar for scrollable tables/panels */
+.nice-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--c-primary) / 0.35) transparent;
+}
+.nice-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.nice-scroll::-webkit-scrollbar-track {
+  background: rgb(var(--c-grey-bg));
+  border-radius: 8px;
+}
+.nice-scroll::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-primary) / 0.3);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 8px;
+}
+.nice-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--c-primary) / 0.55);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.nice-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}

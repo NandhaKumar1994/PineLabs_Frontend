@@ -23,24 +23,25 @@ export const commonEscalation = sheet(
 )
 
 /* ------------------------------------------------------------------ *
- * HDFC Bank
+ * Aurora Retail
  * ------------------------------------------------------------------ */
 const hdfcSheets = [
   sheet(
     'block',
     'Block',
     [
-      { group: 'Prerequisites', columns: ['Card Status', 'Balance', 'Requester'] },
-      { group: 'Input from the requester', columns: ['Need Reason?', 'Outlet (for blocking)'] },
-      { group: 'Validations', columns: ['Activating Merchant Group', 'CPG', 'Descriptive Outlet', 'Action'] },
+      { group: 'Prerequisites', columns: ['Card Status', 'Balance', 'Requester', 'Region'] },
+      { group: 'Input from the requester', columns: ['Need Reason?', 'Outlet (for blocking)', 'Reason Code'] },
+      { group: 'Validations', columns: ['Activating Merchant Group', 'CPG', 'Descriptive Outlet', 'Risk Level'] },
+      { group: 'SLA & Ownership', columns: ['Owner Team', 'Approval Level', 'TAT', 'Action'] },
     ],
     [
-      { 'Card Status': 'Created', Balance: 'NA', Requester: 'Brand POC', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Activating Merchant Group': 'NA', CPG: 'NA', 'Descriptive Outlet': 'NA', Action: 'Approve' },
-      { 'Card Status': 'Purchased', Balance: 'NA', Requester: 'Brand POC', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Activating Merchant Group': 'Brand, Reseller and NAB', CPG: 'NA', 'Descriptive Outlet': 'NA', Action: 'Approve' },
-      { 'Card Status': 'Activated', Balance: 'Zero', Requester: 'Brand POC', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Activating Merchant Group': 'Brand, Reseller and NAB', CPG: 'NA', 'Descriptive Outlet': 'NA', Action: 'Approve' },
-      { 'Card Status': 'Activated', Balance: '>Zero', Requester: 'CES', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Activating Merchant Group': 'GiftBig', CPG: 'Yes', 'Descriptive Outlet': 'NA', Action: 'Escalate' },
-      { 'Card Status': 'Deactivated', Balance: 'NA', Requester: 'Brand POC', 'Need Reason?': 'NA', 'Outlet (for blocking)': 'NA', 'Activating Merchant Group': 'Brand, Reseller and NAB', CPG: 'NA', 'Descriptive Outlet': 'NA', Action: 'Reject' },
-      { 'Card Status': 'Expired', Balance: 'Zero', Requester: 'CES', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Activating Merchant Group': 'GiftBig', CPG: 'Yes', 'Descriptive Outlet': 'Yes', Action: 'Approve' },
+      { 'Card Status': 'Created', Balance: 'NA', Requester: 'Brand POC', Region: 'North', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Reason Code': 'FRD-01', 'Activating Merchant Group': 'NA', CPG: 'NA', 'Descriptive Outlet': 'NA', 'Risk Level': 'Low', 'Owner Team': 'Ops', 'Approval Level': 'L1', TAT: '4h', Action: 'Approve' },
+      { 'Card Status': 'Purchased', Balance: 'NA', Requester: 'Brand POC', Region: 'South', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Reason Code': 'FRD-02', 'Activating Merchant Group': 'Brand, Reseller and NAB', CPG: 'NA', 'Descriptive Outlet': 'NA', 'Risk Level': 'Low', 'Owner Team': 'Ops', 'Approval Level': 'L1', TAT: '4h', Action: 'Approve' },
+      { 'Card Status': 'Activated', Balance: 'Zero', Requester: 'Brand POC', Region: 'West', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Reason Code': 'FRD-03', 'Activating Merchant Group': 'Brand, Reseller and NAB', CPG: 'NA', 'Descriptive Outlet': 'NA', 'Risk Level': 'Medium', 'Owner Team': 'Risk', 'Approval Level': 'L2', TAT: '8h', Action: 'Approve' },
+      { 'Card Status': 'Activated', Balance: '>Zero', Requester: 'CES', Region: 'East', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Reason Code': 'FRD-07', 'Activating Merchant Group': 'GiftBig', CPG: 'Yes', 'Descriptive Outlet': 'NA', 'Risk Level': 'High', 'Owner Team': 'Risk', 'Approval Level': 'L3', TAT: '1h', Action: 'Escalate' },
+      { 'Card Status': 'Deactivated', Balance: 'NA', Requester: 'Brand POC', Region: 'North', 'Need Reason?': 'NA', 'Outlet (for blocking)': 'NA', 'Reason Code': 'NA', 'Activating Merchant Group': 'Brand, Reseller and NAB', CPG: 'NA', 'Descriptive Outlet': 'NA', 'Risk Level': 'Low', 'Owner Team': 'Ops', 'Approval Level': 'L1', TAT: '1d', Action: 'Reject' },
+      { 'Card Status': 'Expired', Balance: 'Zero', Requester: 'CES', Region: 'South', 'Need Reason?': 'Yes', 'Outlet (for blocking)': 'Yes', 'Reason Code': 'FRD-09', 'Activating Merchant Group': 'GiftBig', CPG: 'Yes', 'Descriptive Outlet': 'Yes', 'Risk Level': 'Medium', 'Owner Team': 'Support', 'Approval Level': 'L2', TAT: '8h', Action: 'Approve' },
     ]
   ),
   sheet(
@@ -75,15 +76,15 @@ const hdfcSheets = [
     'POC',
     [{ group: 'Contacts', columns: ['Team', 'Name', 'Email', 'SLA'] }],
     [
-      { Team: 'Brand POC', Name: 'Ravi Kumar', Email: 'brand.poc@hdfcbank.in', SLA: '4h' },
-      { Team: 'Escalation', Name: 'Neha Shah', Email: 'esc@hdfcbank.in', SLA: '2h' },
-      { Team: 'CES', Name: 'Arjun Rao', Email: 'ces@hdfcbank.in', SLA: '8h' },
+      { Team: 'Brand POC', Name: 'Ravi Kumar', Email: 'brand.poc@aurora.example.in', SLA: '4h' },
+      { Team: 'Escalation', Name: 'Neha Shah', Email: 'esc@aurora.example.in', SLA: '2h' },
+      { Team: 'CES', Name: 'Arjun Rao', Email: 'ces@aurora.example.in', SLA: '8h' },
     ]
   ),
 ]
 
 /* ------------------------------------------------------------------ *
- * ICICI Bank — different structure
+ * Bluewave Stores — different structure
  * ------------------------------------------------------------------ */
 const iciciSheets = [
   sheet(
@@ -94,10 +95,10 @@ const iciciSheets = [
       { group: 'Decision', columns: ['Reason Required', 'Approval Level', 'Action'] },
     ],
     [
-      { 'Card Type': 'Coral', Status: 'Active', Region: 'North', 'Reason Required': 'Yes', 'Approval Level': 'L1', Action: 'Block' },
-      { 'Card Type': 'Coral', Status: 'Active', Region: 'South', 'Reason Required': 'Yes', 'Approval Level': 'L2', Action: 'Block' },
-      { 'Card Type': 'Rubyx', Status: 'Expired', Region: 'West', 'Reason Required': 'No', 'Approval Level': 'L1', Action: 'Reject' },
-      { 'Card Type': 'Rubyx', Status: 'Active', Region: 'East', 'Reason Required': 'Yes', 'Approval Level': 'L3', Action: 'Escalate' },
+      { 'Card Type': 'Standard', Status: 'Active', Region: 'North', 'Reason Required': 'Yes', 'Approval Level': 'L1', Action: 'Block' },
+      { 'Card Type': 'Standard', Status: 'Active', Region: 'South', 'Reason Required': 'Yes', 'Approval Level': 'L2', Action: 'Block' },
+      { 'Card Type': 'Premium', Status: 'Expired', Region: 'West', 'Reason Required': 'No', 'Approval Level': 'L1', Action: 'Reject' },
+      { 'Card Type': 'Premium', Status: 'Active', Region: 'East', 'Reason Required': 'Yes', 'Approval Level': 'L3', Action: 'Escalate' },
     ]
   ),
   sheet(
@@ -136,7 +137,7 @@ const iciciSheets = [
 ]
 
 /* ------------------------------------------------------------------ *
- * Axis Bank — another structure
+ * Cedar Mart — another structure
  * ------------------------------------------------------------------ */
 const axisSheets = [
   sheet(
@@ -284,16 +285,16 @@ function bulkSheets(label, domain, seed, rowCount) {
 
 // Curated issuers (mirroring BIN Series) with hand-built distinct sheets.
 const curated = [
-  { id: 'hdfc', name: 'HDFC Bank', classification: 'Digital Gift Card', ...editorStamp(0), subsheets: hdfcSheets },
-  { id: 'icici', name: 'ICICI Bank', classification: 'Physical Gift Card', ...editorStamp(1), subsheets: iciciSheets },
-  { id: 'axis', name: 'Axis Bank', classification: 'Corporate Gifting', ...editorStamp(2), subsheets: axisSheets },
-  { id: 'sbi', name: 'State Bank of India', classification: 'Digital Gift Card', ...editorStamp(3), subsheets: genericSheets('SBI', 'sbi.co.in') },
-  { id: 'kotak', name: 'Kotak Mahindra', classification: 'Reward Card', ...editorStamp(4), subsheets: genericSheets('Kotak', 'kotak.com') },
-  { id: 'yes', name: 'Yes Bank', classification: 'Physical Gift Card', ...editorStamp(5), subsheets: genericSheets('Yes Bank', 'yesbank.in') },
-  { id: 'pnb', name: 'Punjab National Bank', classification: 'Corporate Gifting', ...editorStamp(6), subsheets: genericSheets('PNB', 'pnb.co.in') },
-  { id: 'indusind', name: 'IndusInd Bank', classification: 'Reward Card', ...editorStamp(7), subsheets: genericSheets('IndusInd', 'indusind.com') },
-  { id: 'idfc', name: 'IDFC First Bank', classification: 'Digital Gift Card', ...editorStamp(8), subsheets: genericSheets('IDFC First', 'idfcfirstbank.com') },
-  { id: 'citi', name: 'Citi Bank', classification: 'Corporate Gifting', ...editorStamp(9), subsheets: genericSheets('Citi', 'citi.com') },
+  { id: 'aurora', name: 'Aurora Retail', classification: 'Digital Gift Card', ...editorStamp(0), subsheets: hdfcSheets },
+  { id: 'bluewave', name: 'Bluewave Stores', classification: 'Physical Gift Card', ...editorStamp(1), subsheets: iciciSheets },
+  { id: 'cedar', name: 'Cedar Mart', classification: 'Corporate Gifting', ...editorStamp(2), subsheets: axisSheets },
+  { id: 'delta', name: 'Delta Goods', classification: 'Digital Gift Card', ...editorStamp(3), subsheets: genericSheets('Delta', 'delta.example.in') },
+  { id: 'everest', name: 'Everest Retail', classification: 'Reward Card', ...editorStamp(4), subsheets: genericSheets('Everest', 'everest.example.in') },
+  { id: 'fusion', name: 'Fusion Mart', classification: 'Physical Gift Card', ...editorStamp(5), subsheets: genericSheets('Fusion', 'fusion.example.in') },
+  { id: 'granite', name: 'Granite Stores', classification: 'Corporate Gifting', ...editorStamp(6), subsheets: genericSheets('Granite', 'granite.example.in') },
+  { id: 'horizon', name: 'Horizon Retail', classification: 'Reward Card', ...editorStamp(7), subsheets: genericSheets('Horizon', 'horizon.example.in') },
+  { id: 'ivory', name: 'Ivory Mart', classification: 'Digital Gift Card', ...editorStamp(8), subsheets: genericSheets('Ivory', 'ivory.example.in') },
+  { id: 'jade', name: 'Jade Stores', classification: 'Corporate Gifting', ...editorStamp(9), subsheets: genericSheets('Jade', 'jade.example.in') },
 ]
 
 // Generate ~500 additional issuers to simulate real volume.
@@ -314,14 +315,45 @@ const bulk = Array.from({ length: BULK_COUNT }, (_, i) => {
 
 export const merchants = [...curated, ...bulk]
 
-export function createMerchant({ name, classification }) {
+// Alias — the domain term is now "issuer".
+export const issuers = merchants
+
+/* ------------------------------------------------------------------ *
+ * Instances — an instance groups multiple issuers. The SOP Dashboard
+ * lists instances first; selecting one loads that instance's issuers.
+ * ------------------------------------------------------------------ */
+const INSTANCE_NAMES = [
+  'North Zone', 'South Zone', 'East Zone', 'West Zone', 'Central Zone',
+  'Enterprise', 'SME', 'Retail Partners', 'Online Partners', 'Strategic Accounts',
+  'Pilot Program', 'Legacy Migration', 'New Onboarding', 'Priority Tier', 'Standard Tier',
+]
+
+// Deterministically distribute issuers across instances (round-robin).
+export const instances = INSTANCE_NAMES.map((name, i) => ({
+  id: `inst-${i + 1}`,
+  name,
+  description: `${name} issuer group`,
+  issuerIds: merchants.filter((_, idx) => idx % INSTANCE_NAMES.length === i).map((m) => m.id),
+}))
+
+// Helper: get the issuers belonging to an instance.
+export const issuersForInstance = (instance) => {
+  const set = new Set(instance.issuerIds)
+  return merchants.filter((m) => set.has(m.id))
+}
+
+export function createMerchant({ name, classification, manualEntry = false }) {
   const label = String(name || '').trim()
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'merchant'
   return {
     id: `${slug}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     name: label,
     classification: String(classification || 'Digital Gift Card').trim(),
+    manualEntry, // true when created via the manual "Create Merchant" form
     ...stampEditor(),
-    subsheets: genericSheets(label, `${slug}.example.in`),
+    // Manually created merchants start with NO SOP data — the detail page shows
+    // an upload empty state until data is imported. Non-manual (upload) merchants
+    // get generic starter sheets.
+    subsheets: manualEntry ? [] : genericSheets(label, `${slug}.example.in`),
   }
 }

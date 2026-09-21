@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import {
   CreditCard,
   Store,
@@ -22,7 +22,7 @@ import StatusReasonInfo from './StatusReasonInfo'
 
 const kpis = [
   { icon: CreditCard, label: 'BIN Records', value: binSeries.length.toLocaleString(), delta: '+12%', up: true },
-  { icon: Store, label: 'Merchant SOPs', value: merchants.length.toLocaleString(), delta: '+4%', up: true },
+  { icon: Store, label: 'Issuer SOPs', value: merchants.length.toLocaleString(), delta: '+4%', up: true },
   { icon: Users, label: 'Active Users', value: users.filter((u) => u.status === 'Active').length, delta: '+2', up: true },
   { icon: History, label: 'Changes (7d)', value: revisions.length, delta: '-3%', up: false },
 ]
@@ -44,10 +44,10 @@ const classCounts = merchants.reduce((acc, m) => {
 const classData = Object.entries(classCounts).map(([label, value]) => ({ label, value }))
 
 const topIssuers = [
-  { name: 'HDFC Bank', pct: 92 },
-  { name: 'ICICI Bank', pct: 78 },
-  { name: 'State Bank of India', pct: 64 },
-  { name: 'Axis Bank', pct: 51 },
+  { name: 'Aurora Retail', pct: 92 },
+  { name: 'Bluewave Stores', pct: 78 },
+  { name: 'Delta Goods', pct: 64 },
+  { name: 'Cedar Mart', pct: 51 },
 ]
 
 export default function Overview() {
@@ -97,7 +97,7 @@ export default function Overview() {
 
         <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <h3 className="text-sm font-bold text-heading">SOP by Classification</h3>
-          <p className="text-[11px] text-body">Merchant workbook mix</p>
+          <p className="text-[11px] text-body">Issuer workbook mix</p>
           <div className="flex flex-1 items-center justify-center">
             <DonutChart data={classData} size={150} />
           </div>
@@ -117,7 +117,7 @@ export default function Overview() {
                     <td className="px-4 py-2">
                       <p className="text-sm font-medium text-heading">{r.user}</p>
                       <p className="text-xs text-body">
-                        {r.action} · {r.entity}
+                        {r.action} Â· {r.entity}
                       </p>
                     </td>
                     <td className="px-4 py-2 text-right text-xs text-body">{r.timestamp}</td>
@@ -194,7 +194,7 @@ function OverviewT2() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="flex flex-col rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-bold text-heading">SOP by Classification</h3>
-          <p className="text-[11px] text-body">Merchant workbook mix</p>
+          <p className="text-[11px] text-body">Issuer workbook mix</p>
           <div className="flex flex-1 items-center justify-center">
             <DonutChart data={classData} size={150} />
           </div>
@@ -244,7 +244,7 @@ function OverviewT2() {
               <div>
                 <p className="text-sm font-medium text-heading">{r.user}</p>
                 <p className="text-xs text-body">
-                  {r.action} · {r.entity} · {r.target}
+                  {r.action} Â· {r.entity} Â· {r.target}
                 </p>
               </div>
               <span className="text-xs text-body">{r.timestamp}</span>
@@ -325,3 +325,4 @@ function TicketStatusCard({ elevated = false }) {
     </>
   )
 }
+

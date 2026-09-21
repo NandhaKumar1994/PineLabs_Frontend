@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react'
-import { CreditCard, Copy, Check, ArrowRight, AlertCircle, Search } from 'lucide-react'
+import { CreditCard, Copy, Check, ArrowRight, AlertCircle, Search, Upload } from 'lucide-react'
 import { binSeries } from '../../data/binSeries'
+import { useRole } from '../../theme/RoleContext'
+import BulkLookupModal from './BulkLookupModal'
 
 export default function BinResolver() {
+  const { perms } = useRole()
   const [card, setCard] = useState('')
   const [copied, setCopied] = useState(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   const digits = card.replace(/\D/g, '')
   const bin = digits.slice(0, 6)
@@ -45,14 +49,27 @@ export default function BinResolver() {
       <div className="grid items-stretch gap-0 lg:grid-cols-2">
         {/* left: input */}
         <div className="flex flex-col justify-center border-b border-gray-100 p-4 lg:border-b-0 lg:border-r">
-          <div className="flex items-center gap-2.5">
-            <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary/5 text-primary">
-              <Search className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-sm font-bold text-heading">Find the Issuer</h2>
-              <p className="text-xs text-body">Enter the customer's card number</p>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary/5 text-primary">
+                <Search className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-heading">Find the Issuer</h2>
+                <p className="text-xs text-body">Enter the card number or upload a sheet</p>
+              </div>
             </div>
+            {perms.canUpload && (
+              <button
+                type="button"
+                onClick={() => setBulkOpen(true)}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary/5"
+                title="Look up multiple card numbers from a file"
+              >
+                <Upload className="h-4 w-4" />
+                Upload
+              </button>
+            )}
           </div>
 
           <div className="relative mt-4">
@@ -109,6 +126,8 @@ export default function BinResolver() {
           )}
         </div>
       </div>
+
+      {bulkOpen && <BulkLookupModal onClose={() => setBulkOpen(false)} />}
     </section>
   )
 }
