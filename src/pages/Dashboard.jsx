@@ -7,7 +7,9 @@ import StatCards from '../components/dashboard/StatCards'
 import BinResolver from '../components/dashboard/BinResolver'
 import BinTable from '../components/dashboard/BinTable'
 import SopDashboard from '../components/sop/SopDashboard'
+import AutomationDashboard from '../components/dashboard/AutomationDashboard'
 import UserManagement from '../components/admin/UserManagement'
+import InstanceManagement from '../components/admin/InstanceManagement'
 import RevisionHistory from '../components/admin/RevisionHistory'
 import Overview from '../components/dashboard/Overview'
 
@@ -15,6 +17,8 @@ const titles = {
   dashboard: { title: 'Dashboard', subtitle: 'Overview of your helpdesk automation data' },
   bin: { title: 'BIN Series', subtitle: 'Look up card issuers and manage BIN ranges' },
   sop: { title: 'SOP Dashboard', subtitle: 'Issuer standard operating procedures by instance & classification' },
+  automation: { title: 'Automation Dashboard', subtitle: 'Ticket automation status, run outcomes and API consumption' },
+  instances: { title: 'Instance Management', subtitle: 'Create and manage the instances that group issuers' },
   users: { title: 'User Management', subtitle: 'Manage users, roles and access' },
   history: { title: 'Revision History', subtitle: 'Audit trail of all changes' },
 }
@@ -29,6 +33,8 @@ export default function Dashboard() {
     if (active === 'users' && !perms.canManageUsers) setActive('dashboard')
     if (active === 'history' && !perms.canViewHistory) setActive('dashboard')
     if (active === 'bin' && !perms.canViewBin) setActive('dashboard')
+    if (active === 'automation' && !perms.canViewAutomation) setActive('dashboard')
+    if (active === 'instances' && !perms.canManageInstances) setActive('dashboard')
   }, [active, perms])
 
   const meta = titles[active]
@@ -50,6 +56,10 @@ export default function Dashboard() {
             <Overview />
           ) : active === 'sop' ? (
             <SopDashboard />
+          ) : active === 'automation' ? (
+            <AutomationDashboard />
+          ) : active === 'instances' ? (
+            <InstanceManagement />
           ) : active === 'users' ? (
             <UserManagement />
           ) : active === 'history' ? (

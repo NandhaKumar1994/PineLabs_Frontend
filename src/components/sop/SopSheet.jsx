@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Download, Filter, X, ChevronDown, Plus, Columns3, Upload } from 'lucide-react'
+import { Search, Download, Filter, X, ChevronDown, Plus, Columns3, Upload, History } from 'lucide-react'
 import { useDebounce } from '../../hooks/useDebounce'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../common/Pagination'
@@ -10,6 +10,9 @@ import DeleteRowModal from '../dashboard/DeleteRowModal'
 import AddColumnModal from './AddColumnModal'
 import ColumnUploadModal from '../common/ColumnUploadModal'
 import EditableCell from '../common/EditableCell'
+import EditableHeader from '../common/EditableHeader'
+import VersionHistoryModal from '../common/VersionHistoryModal'
+import { useChangeLog } from '../../hooks/useChangeLog'
 
 const groupTint = ['bg-primary/5 text-primary', 'bg-amber-50 text-amber-700', 'bg-teal-50 text-teal-700']
 
@@ -31,6 +34,53 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
   const [groupsByKey, setGroupsByKey] = useState({})
   const [customColsByKey, setCustomColsByKey] = useState({})
   const [uploadColumn, setUploadColumn] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
+
+  // Recent-change log for this sheet (seeded so the panel has prior context).
+  const { entries: changeLog, log } = useChangeLog([
+    {
+      id: 'sop-seed-2',
+      type: 'update',
+      action: 'Edited cell',
+      change: 'Condition row updated',
+      field: 'Action',
+      before: 'Approve',
+      after: 'Escalate',
+      preview: {
+        columns: ['Card Status', 'Balance', 'Requester', 'Action'],
+        before: { 'Card Status': 'Activated', Balance: '>Zero', Requester: 'CES', Action: 'Approve' },
+        after: { 'Card Status': 'Activated', Balance: '>Zero', Requester: 'CES', Action: 'Escalate' },
+        changedCols: ['Action'],
+      },
+      by: 'Neha Shah',
+      at: '2026-09-08 10:15',
+    },
+    {
+      id: 'sop-seed-3',
+      type: 'create',
+      action: 'Added row',
+      change: 'New condition row appended',
+      fields: [
+        { field: 'Card Status', after: 'Expired' },
+        { field: 'Balance', after: '>Zero' },
+        { field: 'Action', after: 'Escalate' },
+      ],
+      preview: {
+        columns: ['Card Status', 'Balance', 'Requester', 'Action'],
+        after: { 'Card Status': 'Expired', Balance: '>Zero', Requester: 'Brand POC', Action: 'Escalate' },
+      },
+      by: 'Priya Das',
+      at: '2026-09-06 12:30',
+    },
+    {
+      id: 'sop-seed-1',
+      type: 'upload',
+      action: 'Imported',
+      change: 'Sheet replaced from uploaded file',
+      by: 'Neha Shah',
+      at: '2026-09-09 13:10',
+    },
+  ])
 
   const groups = groupsByKey[sheet.key] ?? sheet.groups
   const customColumns = customColsByKey[sheet.key] ?? new Set()
@@ -58,6 +108,7 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
     setUploadColumn(null)
     setEditRow(null)
     setDeleteRow(null)
+    setShowHistory(false)
   }, [sheet])
 
   // unique values per column for the filter dropdowns
@@ -93,10 +144,23 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
 
   // Inline single-cell edit.
   const saveCell = (rowId, col, value) => {
-    const list = (rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)).map((r) =>
-      r._rowId === rowId ? { ...r, [col]: value } : r
-    )
+    const current = rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)
+    const before = current.find((r) => r._rowId === rowId)?.[col]
+    const list = current.map((r) => (r._rowId === rowId ? { ...r, [col]: value } : r))
     commitRows(list)
+    const target = current.find((r) => r._rowId === rowId)
+    log('update', 'Edited cell', sheet.name, {
+      field: col,
+      before: before ?? '',
+      after: value,
+      preview: target
+        ? snapshot({
+            before: target,
+            after: { ...target, [col]: value },
+            changedCols: [col],
+          })
+        : undefined,
+    })
   }
 
   // Add a new column to the sheet: update groups and fill every row with the
@@ -118,7 +182,87 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
     })
     onColumnsChange?.(sheet.key, nextGroups)
     onRowsChange?.(sheet.key, nextRows)
+    const sample = currentRows[0]
+    log('column', 'Added column', `Added under ${group}`, {
+      fields: [
+        { field: 'New column', after: column },
+        ...(defaultValue ? [{ field: 'Default value', after: defaultValue }] : []),
+      ],
+      preview: sample
+        ? snapshot({
+            columns: [...flatColumns, column],
+            before: sample,
+            after: { ...sample, [column]: defaultValue },
+            changedCols: [column],
+            newColumn: column,
+          })
+        : undefined,
+    })
   }
+
+  const norm = (v) => String(v ?? '').trim().toLowerCase()
+
+  // Rename a column group (the top header tier).
+  const renameGroup = (from, to) => {
+    const nextGroups = groups.map((g) => (g.group === from ? { ...g, group: to } : g))
+    setGroupsByKey((prev) => ({ ...prev, [sheet.key]: nextGroups }))
+    onColumnsChange?.(sheet.key, nextGroups)
+    log('rename', 'Renamed group', 'Column group heading changed', {
+      field: 'Group',
+      before: from,
+      after: to,
+    })
+  }
+
+  const validateGroupName = (from, to) =>
+    groups.some((g) => g.group !== from && norm(g.group) === norm(to))
+      ? 'Another group already uses this name.'
+      : null
+
+  // Rename a column. In SOP sheets the column name IS the row key, so the row
+  // data, filters and custom-column tracking all have to be migrated too.
+  const renameColumn = (from, to) => {
+    const nextGroups = groups.map((g) => ({
+      ...g,
+      columns: g.columns.map((c) => (c === from ? to : c)),
+    }))
+
+    const currentRows = rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)
+    const nextRows = currentRows.map((r) => {
+      // Rebuild each row preserving column order, swapping the renamed key.
+      const next = {}
+      Object.entries(r).forEach(([k, v]) => {
+        next[k === from ? to : k] = v
+      })
+      return next
+    })
+
+    setGroupsByKey((prev) => ({ ...prev, [sheet.key]: nextGroups }))
+    setRowsByKey((prev) => ({ ...prev, [sheet.key]: nextRows }))
+    setCustomColsByKey((prev) => {
+      const cur = new Set(prev[sheet.key] ?? [])
+      if (cur.delete(from)) cur.add(to)
+      return { ...prev, [sheet.key]: cur }
+    })
+    setFilters((prev) => {
+      if (!(from in prev)) return prev
+      const { [from]: val, ...rest } = prev
+      return { ...rest, [to]: val }
+    })
+
+    onColumnsChange?.(sheet.key, nextGroups)
+    onRowsChange?.(sheet.key, nextRows)
+    log('rename', 'Renamed column', 'Column header changed', {
+      field: 'Column',
+      before: from,
+      after: to,
+    })
+  }
+
+  const validateColumnName = (from, to) =>
+    flatColumns.some((c) => c !== from && norm(c) === norm(to))
+      ? 'Another column already uses this name.'
+      : null
 
   // Apply uploaded values for a custom column, matched by Issuer/Merchant.
   // Every row in this merchant's sheet receives the value uploaded for it.
@@ -132,8 +276,28 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
     onRowsChange?.(sheet.key, nextRows)
   }
 
+  // Summarise a row as field/value pairs so each value is colour-coded.
+  const rowFields = (row, direction = 'after') =>
+    flatColumns
+      .filter((c) => String(row[c] ?? '').trim())
+      .map((c) => ({ field: c, [direction]: row[c] }))
+
+  // Table snapshot used by the eye-icon preview.
+  const snapshot = ({ before, after, changedCols = [], newColumn, columns = flatColumns }) => ({
+    columns,
+    labels: Object.fromEntries(columns.map((c) => [c, c])),
+    before,
+    after,
+    changedCols,
+    newColumn,
+  })
+
   const addRow = (row) => {
     commitRows([{ ...row, _rowId: newRowId() }, ...(rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key))])
+    log('create', 'Added row', `New row in ${sheet.name}`, {
+      fields: rowFields(row),
+      preview: snapshot({ after: row }),
+    })
     setQuery('')
   }
 
@@ -143,12 +307,27 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
       r._rowId === editRow._rowId ? { ...r, ...next, _rowId: editRow._rowId } : r
     )
     commitRows(list)
+    const changed = flatColumns
+      .filter((c) => String(next[c] ?? '') !== String(editRow[c] ?? ''))
+      .map((c) => ({ field: c, before: editRow[c] ?? '', after: next[c] ?? '' }))
+    log('update', 'Updated row', `Row edited in ${sheet.name}`, {
+      ...(changed.length ? { fields: changed } : {}),
+      preview: snapshot({
+        before: editRow,
+        after: { ...editRow, ...next },
+        changedCols: changed.map((c) => c.field),
+      }),
+    })
     setEditRow(null)
   }
 
   const confirmDelete = () => {
     if (!deleteRow) return
     commitRows((rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)).filter((r) => r._rowId !== deleteRow._rowId))
+    log('delete', 'Deleted row', `Row removed from ${sheet.name}`, {
+      fields: rowFields(deleteRow, 'before'),
+      preview: snapshot({ before: deleteRow }),
+    })
     setDeleteRow(null)
   }
 
@@ -188,6 +367,15 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            title="View the last 5 changes to this sheet"
+            className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
+          >
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Version History</span>
+          </button>
           {enableAddRow && perms.canCreate && (
             <button
               type="button"
@@ -283,7 +471,12 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
                     groupTint[gi % groupTint.length]
                   }`}
                 >
-                  {g.group}
+                  <EditableHeader
+                    value={g.group}
+                    canEdit={perms.canEdit}
+                    validate={(next) => validateGroupName(g.group, next)}
+                    onSave={(next) => renameGroup(g.group, next)}
+                  />
                 </th>
               ))}
               {(perms.canEdit || perms.canDelete) && (
@@ -298,8 +491,12 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
                     filters[col] ? 'bg-primary/10 text-primary' : 'bg-grey-light text-heading'
                   }`}
                 >
-                  <span className="inline-flex items-center gap-1.5">
-                    {col}
+                  <EditableHeader
+                    value={col}
+                    canEdit={perms.canEdit}
+                    validate={(next) => validateColumnName(col, next)}
+                    onSave={(next) => renameColumn(col, next)}
+                  >
                     {customColumns.has(col) && perms.canUpload && (
                       <button
                         type="button"
@@ -310,7 +507,7 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
                         <Upload className="h-3.5 w-3.5" />
                       </button>
                     )}
-                  </span>
+                  </EditableHeader>
                 </th>
               ))}
             </tr>
@@ -375,6 +572,14 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
         )}
       </div>
 
+      {showHistory && (
+        <VersionHistoryModal
+          title="Version History"
+          subtitle={`Last 5 changes to ${sheet.name}`}
+          entries={changeLog}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
       {showAdd && enableAddRow && (
         <AddRowModal
           columns={flatColumns}

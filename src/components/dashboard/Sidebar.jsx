@@ -2,6 +2,8 @@ import {
   LayoutDashboard,
   CreditCard,
   ClipboardList,
+  Bot,
+  Layers,
   Users,
   History,
   Settings,
@@ -16,6 +18,8 @@ const allNav = [
   { icon: LayoutDashboard, label: 'Dashboard', key: 'dashboard' },
   { icon: CreditCard, label: 'BIN Series', key: 'bin', requires: 'canViewBin' },
   { icon: ClipboardList, label: 'SOP Dashboard', key: 'sop' },
+  { icon: Bot, label: 'Automation Dashboard', key: 'automation', requires: 'canViewAutomation' },
+  { icon: Layers, label: 'Instance Management', key: 'instances', requires: 'canManageInstances' },
   { icon: Users, label: 'User Management', key: 'users', requires: 'canManageUsers' },
   { icon: History, label: 'Revision History', key: 'history', requires: 'canViewHistory' },
 ]

@@ -1,0 +1,304 @@
+import { useMemo, useState } from 'react'
+import { Search, Plus, Layers, Building2, Download, Power, PowerOff } from 'lucide-react'
+import { instances as seedInstances, createInstance } from '../../data/sopData'
+import { formatDateTime, stampEditor } from '../../data/users'
+import { useDebounce } from '../../hooks/useDebounce'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../common/Pagination'
+import EditableCell from '../common/EditableCell'
+import RowActionsMenu from '../dashboard/RowActionsMenu'
+import { useRole } from '../../theme/RoleContext'
+import InstanceFormModal from './InstanceFormModal'
+import DeleteInstanceModal from './DeleteInstanceModal'
+import { downloadCsv, serializeCsv } from '../../utils/csv'
+
+const statusTint = {
+  Active: 'bg-emerald-50 text-emerald-700',
+  Inactive: 'bg-gray-100 text-gray-500',
+}
+
+export default function InstanceManagement() {
+  const { perms } = useRole()
+  const [data, setData] = useState(() => seedInstances.map((i) => ({ ...i })))
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('All')
+  const [showCreate, setShowCreate] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+
+  const debounced = useDebounce(query, 200)
+
+  const filtered = useMemo(() => {
+    const q = debounced.trim().toLowerCase()
+    return data.filter((i) => {
+      const matchesStatus = statusFilter === 'All' || (i.status || 'Active') === statusFilter
+      const matchesQuery =
+        !q ||
+        i.name.toLowerCase().includes(q) ||
+        String(i.description || '').toLowerCase().includes(q)
+      return matchesStatus && matchesQuery
+    })
+  }, [debounced, data, statusFilter])
+
+  const pager = usePagination(filtered, 12)
+
+  const names = useMemo(() => data.map((i) => i.name), [data])
+  const activeCount = data.filter((i) => (i.status || 'Active') === 'Active').length
+  const totalIssuers = data.reduce((s, i) => s + (i.issuerIds?.length || 0), 0)
+
+  const addInstance = (payload) => {
+    setData((prev) => [createInstance(payload), ...prev])
+    setQuery('')
+  }
+
+  const saveEdit = (payload) => {
+    if (!editTarget) return
+    setData((prev) =>
+      prev.map((i) => (i.id === editTarget.id ? { ...i, ...payload, ...stampEditor() } : i))
+    )
+    setEditTarget(null)
+  }
+
+  // Inline edits for name / description straight from the table.
+  const saveField = (id, field, value) => {
+    setData((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, [field]: value, ...stampEditor() } : i))
+    )
+  }
+
+  const toggleStatus = (inst) => {
+    const next = (inst.status || 'Active') === 'Active' ? 'Inactive' : 'Active'
+    setData((prev) =>
+      prev.map((i) => (i.id === inst.id ? { ...i, status: next, ...stampEditor() } : i))
+    )
+  }
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return
+    setData((prev) => prev.filter((i) => i.id !== deleteTarget.id))
+    setDeleteTarget(null)
+  }
+
+  const exportCsv = () => {
+    const cols = ['name', 'description', 'status', 'issuers', 'updatedBy', 'updatedAt']
+    const labels = {
+      name: 'Instance',
+      description: 'Description',
+      status: 'Status',
+      issuers: 'Issuers',
+      updatedBy: 'Updated By',
+      updatedAt: 'Updated At',
+    }
+    const rows = filtered.map((i) => ({
+      ...i,
+      status: i.status || 'Active',
+      issuers: i.issuerIds?.length || 0,
+    }))
+    downloadCsv('instances.csv', serializeCsv(cols, labels, rows))
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* summary */}
+      <div className="grid shrink-0 grid-cols-3 divide-x divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+        {[
+          { icon: Layers, label: 'Total Instances', value: data.length },
+          { icon: Power, label: 'Active', value: activeCount },
+          { icon: Building2, label: 'Issuers Grouped', value: totalIssuers.toLocaleString() },
+        ].map(({ icon: Icon, label, value }) => (
+          <div key={label} className="flex items-center gap-3 px-4 py-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/5 text-primary">
+              <Icon className="h-4.5 w-4.5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-lg font-extrabold leading-none text-heading">{value}</p>
+              <p className="mt-0.5 truncate text-xs text-body">{label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        {/* toolbar */}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <div className="relative w-52 sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search instance…"
+                className="w-full rounded-lg border border-gray-200 bg-grey-light py-1.5 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-grey-light py-1.5 px-3 text-sm text-body outline-none transition focus:border-primary focus:bg-white"
+            >
+              <option value="All">All statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportCsv}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+            {perms.canCreate && (
+              <button
+                onClick={() => setShowCreate(true)}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Create Instance</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* table */}
+        <div className="nice-scroll min-h-0 flex-1 overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-gray-100 bg-white">
+                {['Instance', 'Description', 'Issuers', 'Status', 'Updated By', ''].map((h, i) => (
+                  <th
+                    key={i}
+                    className="whitespace-nowrap bg-white px-5 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {pager.pageItems.map((inst) => {
+                const status = inst.status || 'Active'
+                return (
+                  <tr key={inst.id} className="transition hover:bg-primary/[0.03]">
+                    <td className="px-5 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/5 text-primary">
+                          <Layers className="h-4 w-4" />
+                        </span>
+                        <span className="font-semibold text-heading">
+                          <EditableCell
+                            value={inst.name}
+                            canEdit={perms.canEdit}
+                            onSave={(v) => saveField(inst.id, 'name', v)}
+                          />
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-2.5 text-body">
+                      <EditableCell
+                        value={inst.description || ''}
+                        canEdit={perms.canEdit}
+                        onSave={(v) => saveField(inst.id, 'description', v)}
+                      />
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-2.5">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-grey-light px-2 py-0.5 text-xs font-semibold text-body">
+                        <Building2 className="h-3 w-3" />
+                        {inst.issuerIds?.length || 0}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-2.5">
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusTint[status]}`}
+                      >
+                        {status}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-2.5 text-xs text-body">
+                      <p className="font-medium text-heading">{inst.updatedBy || '—'}</p>
+                      {inst.updatedAt && <p>{formatDateTime(inst.updatedAt)}</p>}
+                    </td>
+                    <td className="px-5 py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {perms.canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => toggleStatus(inst)}
+                            title={status === 'Active' ? 'Deactivate' : 'Activate'}
+                            className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-grey-light ${
+                              status === 'Active'
+                                ? 'text-emerald-500 hover:text-amber-600'
+                                : 'text-gray-400 hover:text-emerald-600'
+                            }`}
+                          >
+                            {status === 'Active' ? (
+                              <Power className="h-3.5 w-3.5" />
+                            ) : (
+                              <PowerOff className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
+                        {(perms.canEdit || perms.canDelete) && (
+                          <RowActionsMenu
+                            onEdit={perms.canEdit ? () => setEditTarget(inst) : undefined}
+                            onDelete={perms.canDelete ? () => setDeleteTarget(inst) : undefined}
+                          />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {pager.total === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center text-sm text-body">
+                    No instance found{query.trim() ? ` for “${query}”` : ''}.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="shrink-0 border-t border-gray-100 px-5 py-3">
+          <Pagination
+            page={pager.page}
+            totalPages={pager.totalPages}
+            start={pager.start}
+            end={pager.end}
+            total={pager.total}
+            onPrev={pager.prev}
+            onNext={pager.next}
+            onGoto={pager.setPage}
+            label="instances"
+          />
+        </div>
+      </section>
+
+      {showCreate && (
+        <InstanceFormModal
+          existingNames={names}
+          onClose={() => setShowCreate(false)}
+          onSubmit={addInstance}
+        />
+      )}
+      {editTarget && (
+        <InstanceFormModal
+          initial={editTarget}
+          existingNames={names}
+          onClose={() => setEditTarget(null)}
+          onSubmit={saveEdit}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteInstanceModal
+          instance={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+        />
+      )}
+    </div>
+  )
+}

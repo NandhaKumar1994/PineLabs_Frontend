@@ -22,6 +22,7 @@ export default function AddRowModal({
   initial,
   groups,
   selectFields = [],
+  validateRow,
   onClose,
   onSubmit,
   title,
@@ -48,9 +49,14 @@ export default function AddRowModal({
   const set = (col) => (e) => setForm((f) => ({ ...f, [col]: e.target.value }))
 
   const requiredSelects = selectFields.filter((f) => f.required !== false)
-  const valid =
+  const filled =
     columns.every((col) => String(form[col] ?? '').trim()) &&
     requiredSelects.every((f) => String(form[f.name] ?? '').trim())
+
+  // Optional caller-supplied check (e.g. duplicate name within an instance).
+  // Returns an error message string, or falsy when the row is acceptable.
+  const duplicateError = validateRow ? validateRow(form) : null
+  const valid = filled && !duplicateError
 
   const submit = (e) => {
     e.preventDefault()
@@ -154,6 +160,12 @@ export default function AddRowModal({
                 </div>
               ))
             : columns.map((col) => renderField(col))}
+
+          {duplicateError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+              {duplicateError}
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-200 px-5 py-3">

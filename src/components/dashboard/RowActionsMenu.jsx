@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Copy, Trash2 } from 'lucide-react'
 
-export default function RowActionsMenu({ onEdit, onDelete }) {
+export default function RowActionsMenu({ onEdit, onClone, onDelete }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0, flip: false })
   const btnRef = useRef(null)
@@ -80,6 +80,17 @@ export default function RowActionsMenu({ onEdit, onDelete }) {
               >
                 <Pencil className="h-3.5 w-3.5 text-body" />
                 Edit
+              </button>
+            )}
+            {onClone && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={pick(onClone)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-heading transition hover:bg-grey-light"
+              >
+                <Copy className="h-3.5 w-3.5 text-body" />
+                Clone
               </button>
             )}
             {onDelete && (

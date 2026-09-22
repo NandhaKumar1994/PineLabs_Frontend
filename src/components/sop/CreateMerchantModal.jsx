@@ -14,15 +14,26 @@ export default function CreateMerchantModal({
   existingNames = [],
   instances = [],
   defaultInstanceId = '',
+  // (instanceId, name) => boolean — true when that instance already has the name.
+  isDuplicateInInstance,
+  initialName = '',
+  initialClassification = 'Digital Gift Card',
+  title = 'Create Issuer',
+  subtitle = 'Add an issuer manually; import its SOP details afterwards',
+  submitLabel = 'Create Issuer',
   onClose,
   onCreate,
 }) {
-  const [name, setName] = useState('')
-  const [classification, setClassification] = useState('Digital Gift Card')
+  const [name, setName] = useState(initialName)
+  const [classification, setClassification] = useState(initialClassification)
   const [instanceId, setInstanceId] = useState(defaultInstanceId)
 
   const trimmed = name.trim()
-  const duplicate = existingNames.some((n) => n.toLowerCase() === trimmed.toLowerCase())
+  // Duplicate check is scoped to the selected instance when the caller provides
+  // a resolver; otherwise it falls back to the names passed in.
+  const duplicate = isDuplicateInInstance
+    ? !!instanceId && isDuplicateInInstance(instanceId, trimmed)
+    : existingNames.some((n) => n.toLowerCase() === trimmed.toLowerCase())
   const valid = trimmed && !duplicate && !!instanceId
 
   const submit = (e) => {
@@ -46,10 +57,8 @@ export default function CreateMerchantModal({
               <Store className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-sm font-bold text-heading">Create Issuer</h2>
-              <p className="text-xs text-body">
-                Add an issuer manually; import its SOP details afterwards
-              </p>
+              <h2 className="text-sm font-bold text-heading">{title}</h2>
+              <p className="text-xs text-body">{subtitle}</p>
             </div>
           </div>
           <button
@@ -76,7 +85,9 @@ export default function CreateMerchantModal({
             />
             {duplicate && (
               <span className="mt-1 block text-xs text-red-500">
-                An issuer with this name already exists.
+                An issuer named “{trimmed}” already exists in
+                {' '}
+                {instances.find((i) => i.id === instanceId)?.name || 'this instance'}.
               </span>
             )}
           </label>
@@ -136,7 +147,7 @@ export default function CreateMerchantModal({
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90 disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
-            Create Issuer
+            {submitLabel}
           </button>
         </div>
       </form>

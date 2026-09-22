@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, Store, ChevronRight, FileSpreadsheet, Upload, User, Plus, Sparkles } from 'lucide-react'
+import { Search, Store, ChevronRight, FileSpreadsheet, Upload, User, Plus, Sparkles, Copy, CheckCircle2, XCircle, Power, PowerOff } from 'lucide-react'
 import { merchants as allMerchants, createMerchant } from '../../data/sopData'
 import { stampEditor, formatDateTime } from '../../data/users'
 import { useDebounce } from '../../hooks/useDebounce'
@@ -9,6 +9,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { useRole } from '../../theme/RoleContext'
 import UploadSheetModal from '../dashboard/UploadSheetModal'
 import CreateMerchantModal from './CreateMerchantModal'
+import StatusConfirmModal from './StatusConfirmModal'
 import { identityValue } from '../../utils/csv'
 
 const merchantColumns = ['name', 'classification']
@@ -24,6 +25,8 @@ export default function MerchantList({
   headerLeft = null,
   instances = [],
   currentInstanceId = '',
+  // (instanceId, name) => boolean — checks duplicates across the whole dataset.
+  isDuplicateInInstance,
 }) {
   const { theme } = useTheme()
   const { perms } = useRole()
@@ -31,20 +34,44 @@ export default function MerchantList({
   const [query, setQuery] = useState('')
   const [showUpload, setShowUpload] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [cloneSource, setCloneSource] = useState(null)
+  // 'active' | 'inactive' — which issuer list is on screen.
+  const [statusView, setStatusView] = useState('active')
+  // Issuer pending an activate/deactivate confirmation.
+  const [statusTarget, setStatusTarget] = useState(null)
 
   const debouncedQuery = useDebounce(query, 200)
 
+  // Issuers default to active unless explicitly deactivated.
+  const isActive = (m) => m.status !== 'Inactive'
+
+  const activeCount = useMemo(() => merchants.filter(isActive).length, [merchants])
+  const inactiveCount = merchants.length - activeCount
+
   const filtered = useMemo(() => {
     const q = debouncedQuery.trim().toLowerCase()
-    if (!q) return merchants
-    return merchants.filter(
+    const byStatus = merchants.filter((m) =>
+      statusView === 'active' ? isActive(m) : !isActive(m)
+    )
+    if (!q) return byStatus
+    return byStatus.filter(
       (m) =>
         m.name.toLowerCase().includes(q) ||
         m.classification.toLowerCase().includes(q)
     )
-  }, [debouncedQuery, merchants])
+  }, [debouncedQuery, merchants, statusView])
 
   const pager = usePagination(filtered, 24)
+
+  // Flip an issuer between Active and Inactive (after confirmation).
+  const confirmStatusChange = () => {
+    if (!statusTarget) return
+    const next = isActive(statusTarget) ? 'Inactive' : 'Active'
+    onMerchantsChange?.((prev) =>
+      prev.map((x) => (x.id === statusTarget.id ? { ...x, status: next, ...stampEditor() } : x))
+    )
+    setStatusTarget(null)
+  }
 
   const merchantNames = useMemo(() => merchants.map((m) => m.name), [merchants])
 
@@ -89,12 +116,64 @@ export default function MerchantList({
     setQuery('')
   }
 
+  // Clone an issuer: copies its SOP sheets into a new issuer, into the chosen
+  // instance, under a new (non-duplicate) name.
+  const cloneIssuer = ({ name, classification, instanceId }) => {
+    if (!cloneSource) return
+    const copy = {
+      ...createMerchant({ name, classification }),
+      // deep-ish copy so edits to the clone don't mutate the source
+      subsheets: (cloneSource.subsheets || []).map((s) => ({
+        ...s,
+        groups: s.groups.map((g) => ({ ...g, columns: [...g.columns] })),
+        rows: s.rows.map((r) => ({ ...r })),
+      })),
+    }
+    onMerchantsChange?.((prev) => [copy, ...prev], instanceId)
+    setCloneSource(null)
+    setQuery('')
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {/* header: instance title (left) + actions + search on a single row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {headerLeft}
         <div className="flex items-center gap-2 sm:ml-auto">
+          {/* Active / Inactive issuer lists */}
+          <div className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5">
+            <button
+              type="button"
+              onClick={() => setStatusView('active')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                statusView === 'active'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-body hover:bg-grey-light'
+              }`}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Active</span>
+              <span className="rounded-full bg-grey-light px-1.5 text-[11px] font-bold text-body">
+                {activeCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusView('inactive')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                statusView === 'inactive'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-body hover:bg-grey-light'
+              }`}
+            >
+              <XCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Inactive</span>
+              <span className="rounded-full bg-grey-light px-1.5 text-[11px] font-bold text-body">
+                {inactiveCount}
+              </span>
+            </button>
+          </div>
+
           {perms.canCreate && (
             <button
               type="button"
@@ -130,7 +209,9 @@ export default function MerchantList({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {pager.total === 0 ? (
           <p className="py-12 text-center text-sm text-body">
-            No issuer found for “{query}”.
+            {query.trim()
+              ? `No ${statusView} issuer found for “${query}”.`
+              : `No ${statusView} issuers in this instance.`}
           </p>
         ) : t2 ? (
           /* Theme 2: dense single-column list rows */
@@ -178,22 +259,64 @@ export default function MerchantList({
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {pager.pageItems.map((m) => (
-              <button
+              <div
                 key={m.id}
-                onClick={() => onSelect(m)}
-                className={`group flex items-center gap-3 rounded-xl border bg-white p-4 text-left shadow-sm transition hover:shadow-md ${
-                  m.manualEntry
-                    ? 'border-emerald-300 ring-1 ring-emerald-100 hover:border-emerald-400'
-                    : 'border-gray-200 hover:border-primary'
+                className={`group relative flex items-center gap-3 rounded-xl border bg-white p-4 text-left shadow-sm transition hover:shadow-md ${
+                  !isActive(m)
+                    ? 'border-gray-200 opacity-70 hover:border-gray-300'
+                    : m.manualEntry
+                      ? 'border-emerald-300 ring-1 ring-emerald-100 hover:border-emerald-400'
+                      : 'border-gray-200 hover:border-primary'
                 }`}
               >
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/5 text-primary">
+                <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
+                  {perms.canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setStatusTarget(m)}
+                      title={isActive(m) ? `Deactivate ${m.name}` : `Activate ${m.name}`}
+                      className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-grey-light ${
+                        isActive(m)
+                          ? 'text-emerald-500 hover:text-amber-600'
+                          : 'text-gray-400 hover:text-emerald-600'
+                      }`}
+                    >
+                      {isActive(m) ? (
+                        <Power className="h-3.5 w-3.5" />
+                      ) : (
+                        <PowerOff className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
+                  {perms.canCreate && (
+                    <button
+                      type="button"
+                      onClick={() => setCloneSource(m)}
+                      title={`Clone ${m.name}`}
+                      className="grid h-7 w-7 place-items-center rounded-md text-gray-300 transition hover:bg-grey-light hover:text-primary"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSelect(m)}
+                  className="absolute inset-0 rounded-xl"
+                  aria-label={`Open ${m.name} SOP`}
+                />
+                <span className="pointer-events-none grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/5 text-primary">
                   <Store className="h-6 w-6" />
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className="pointer-events-none min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 truncate font-bold text-heading">
                     <span className="truncate">{m.name}</span>
-                    {m.manualEntry && (
+                    {!isActive(m) && (
+                      <span className="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                        Inactive
+                      </span>
+                    )}
+                    {m.manualEntry && isActive(m) && (
                       <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">
                         <Sparkles className="h-2.5 w-2.5" />
                         New
@@ -221,8 +344,8 @@ export default function MerchantList({
                     </div>
                   )}
                 </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-primary" />
-              </button>
+                <ChevronRight className="pointer-events-none h-5 w-5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-primary" />
+              </div>
             ))}
           </div>
         )}
@@ -264,8 +387,34 @@ export default function MerchantList({
           existingNames={merchantNames}
           instances={instances}
           defaultInstanceId={currentInstanceId}
+          isDuplicateInInstance={isDuplicateInInstance}
           onClose={() => setShowCreate(false)}
           onCreate={createManualMerchant}
+        />
+      )}
+
+      {statusTarget && (
+        <StatusConfirmModal
+          issuer={statusTarget}
+          deactivating={isActive(statusTarget)}
+          onClose={() => setStatusTarget(null)}
+          onConfirm={confirmStatusChange}
+        />
+      )}
+
+      {cloneSource && (
+        <CreateMerchantModal
+          existingNames={merchantNames}
+          instances={instances}
+          defaultInstanceId={currentInstanceId}
+          isDuplicateInInstance={isDuplicateInInstance}
+          initialName={`${cloneSource.name} (Copy)`}
+          initialClassification={cloneSource.classification}
+          title="Clone Issuer"
+          subtitle={`Copy “${cloneSource.name}” and its SOP sheets into an instance`}
+          submitLabel="Create Clone"
+          onClose={() => setCloneSource(null)}
+          onCreate={cloneIssuer}
         />
       )}
     </div>

@@ -13,11 +13,14 @@ export default function CreateUserModal({ onClose, onCreate }) {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  const filteredMerchants = useMemo(() => {
+  // Full set that matches the current search (used by Select all).
+  const matchingMerchants = useMemo(() => {
     const q = merchantQuery.trim().toLowerCase()
-    const base = q ? merchants.filter((m) => m.name.toLowerCase().includes(q)) : merchants
-    return base.slice(0, 60)
+    return q ? merchants.filter((m) => m.name.toLowerCase().includes(q)) : merchants
   }, [merchantQuery])
+
+  // Only render a capped slice for performance.
+  const filteredMerchants = useMemo(() => matchingMerchants.slice(0, 60), [matchingMerchants])
 
   const isMerchantOn = (id) => !!access[id]
   const sheetCount = (id) => (access[id] ? access[id].size : 0)
@@ -46,6 +49,25 @@ export default function CreateUserModal({ onClose, onCreate }) {
     })
 
   const selectedMerchantCount = Object.keys(access).length
+
+  // Whether every issuer matching the current search is fully selected.
+  const allSelected =
+    matchingMerchants.length > 0 && matchingMerchants.every((m) => access[m.id])
+
+  // Select all → enable every matching issuer with all its subsheets.
+  // Deselect all → remove them.
+  const toggleSelectAll = () =>
+    setAccess((prev) => {
+      const next = { ...prev }
+      if (allSelected) {
+        matchingMerchants.forEach((m) => delete next[m.id])
+      } else {
+        matchingMerchants.forEach((m) => {
+          next[m.id] = new Set(m.subsheets.map((s) => s.key))
+        })
+      }
+      return next
+    })
 
   const valid = form.name.trim() && form.email.trim() && form.role
 
@@ -129,7 +151,29 @@ export default function CreateUserModal({ onClose, onCreate }) {
               />
             </div>
 
-            <div className="max-h-64 divide-y divide-gray-100 overflow-auto rounded-lg border border-gray-200">
+            <div className="overflow-hidden rounded-lg border border-gray-200">
+              {/* select all issuers */}
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className="flex w-full items-center gap-2 border-b border-gray-200 bg-grey-light/60 px-3 py-2 text-left transition hover:bg-grey-light"
+              >
+                <span
+                  className={`grid h-4 w-4 shrink-0 place-items-center rounded border transition ${
+                    allSelected ? 'border-primary bg-primary text-white' : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  {allSelected && <Check className="h-3 w-3" strokeWidth={3} />}
+                </span>
+                <span className="text-sm font-semibold text-heading">
+                  {allSelected ? 'Deselect all issuers' : 'Select all issuers'}
+                </span>
+                <span className="ml-auto text-xs text-body">
+                  {matchingMerchants.length} issuer{matchingMerchants.length === 1 ? '' : 's'}
+                </span>
+              </button>
+
+              <div className="max-h-64 divide-y divide-gray-100 overflow-auto">
               {filteredMerchants.map((m) => {
                 const on = isMerchantOn(m.id)
                 const open = expanded === m.id
@@ -190,6 +234,7 @@ export default function CreateUserModal({ onClose, onCreate }) {
                   </div>
                 )
               })}
+              </div>
             </div>
           </div>
         </div>

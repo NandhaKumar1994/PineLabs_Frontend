@@ -8,6 +8,7 @@ import {
   Check,
   X,
   Columns3,
+  History,
 } from 'lucide-react'
 import { binSeries, stampNow } from '../../data/binSeries'
 import { instances } from '../../data/sopData'
@@ -23,6 +24,9 @@ import DeleteRowModal from './DeleteRowModal'
 import AddColumnModal from './AddColumnModal'
 import ColumnUploadModal from '../common/ColumnUploadModal'
 import EditableCell from '../common/EditableCell'
+import EditableHeader from '../common/EditableHeader'
+import VersionHistoryModal from '../common/VersionHistoryModal'
+import { useChangeLog } from '../../hooks/useChangeLog'
 import { downloadCsv, serializeCsv, issuerKey } from '../../utils/csv'
 
 const baseColumnLabels = {
@@ -53,11 +57,61 @@ export default function BinTable() {
   const [showUpload, setShowUpload] = useState(false)
   const [showAddColumn, setShowAddColumn] = useState(false)
   const [editRow, setEditRow] = useState(null)
+  const [cloneRow, setCloneRow] = useState(null)
   const [deleteRow, setDeleteRow] = useState(null)
   const [data, setData] = useState(() => [...binSeries])
   const [columnLabels, setColumnLabels] = useState(baseColumnLabels)
   const [customColumns, setCustomColumns] = useState(() => new Set())
   const [uploadColumn, setUploadColumn] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
+
+  // Recent-change log for this table (seeded with prior audit entries).
+  const { entries: changeLog, log } = useChangeLog([
+    {
+      id: 'seed-2',
+      type: 'update',
+      action: 'Edited cell',
+      change: 'Aurora Retail',
+      field: 'Merchant Prefix',
+      before: '001',
+      after: '021',
+      preview: {
+        columns: ['issuer', 'cardProgramGroupName', 'binIin', 'merchantPrefix'],
+        labels: baseColumnLabels,
+        before: { issuer: 'Aurora Retail', cardProgramGroupName: 'Aurora Elite', binIin: '401288', merchantPrefix: '001' },
+        after: { issuer: 'Aurora Retail', cardProgramGroupName: 'Aurora Elite', binIin: '401288', merchantPrefix: '021' },
+        changedCols: ['merchantPrefix'],
+      },
+      by: 'Ravi Kumar',
+      at: '2026-09-09 14:32',
+    },
+    {
+      id: 'seed-3',
+      type: 'create',
+      action: 'Added record',
+      change: 'New record for Ivory Mart',
+      fields: [
+        { field: 'Issuer', after: 'Ivory Mart' },
+        { field: 'BIN / IIN Code', after: '533012' },
+        { field: 'Merchant Prefix', after: '006' },
+      ],
+      preview: {
+        columns: ['issuer', 'cardProgramGroupName', 'binIin', 'merchantPrefix'],
+        labels: baseColumnLabels,
+        after: { issuer: 'Ivory Mart', cardProgramGroupName: 'Ivory Wealth', binIin: '533012', merchantPrefix: '006' },
+      },
+      by: 'Arjun Rao',
+      at: '2026-09-09 11:47',
+    },
+    {
+      id: 'seed-1',
+      type: 'upload',
+      action: 'Imported',
+      change: '600 records imported from sheet',
+      by: 'Arjun Rao',
+      at: '2026-09-07 14:03',
+    },
+  ])
 
   const allColumns = useMemo(
     () => (data[0] ? Object.keys(data[0]) : Object.keys(columnLabels)),
@@ -80,8 +134,64 @@ export default function BinTable() {
     )
   }, [debouncedQuery, query, data])
 
+  // Summarise a row as field/after pairs so every added value shows in green.
+  const rowFields = (row, direction = 'after') =>
+    formColumns
+      .filter((c) => String(row[c] ?? '').trim())
+      .map((c) => ({
+        field: columnLabels[c] || humanize(c),
+        [direction]: row[c],
+      }))
+
+  // Table snapshot used by the eye-icon preview.
+  const snapshot = ({ before, after, changedCols = [], newColumn }) => ({
+    columns: formColumns,
+    labels: Object.fromEntries(formColumns.map((c) => [c, columnLabels[c] || humanize(c)])),
+    before,
+    after,
+    changedCols,
+    newColumn,
+  })
+
   const addRow = (row) => {
     setData((prev) => [{ ...row, id: newId(), ...stampNow() }, ...prev])
+    log('create', 'Added record', `New record for ${row.issuer || 'issuer'}`, {
+      fields: rowFields(row),
+      preview: snapshot({ after: row }),
+    })
+    setQuery('')
+  }
+
+  const norm = (v) => String(v ?? '').trim().toLowerCase()
+
+  // An issuer name must be unique within an instance. `ignoreId` lets the edit
+  // form skip the row being edited.
+  const duplicateIssuer = (form, ignoreId = null) => {
+    const issuer = norm(form.issuer)
+    const instance = norm(form.instance)
+    if (!issuer) return null
+    const clash = data.some(
+      (r) =>
+        r.id !== ignoreId &&
+        norm(r.issuer) === issuer &&
+        // Rows without an instance are treated as belonging to the same scope
+        // as the one being entered, so a blank instance still blocks repeats.
+        (!instance || !r.instance || norm(r.instance) === instance)
+    )
+    if (!clash) return null
+    return instance
+      ? `“${form.issuer.trim()}” already exists in the ${form.instance} instance.`
+      : `“${form.issuer.trim()}” already exists.`
+  }
+
+  // Clone: prefill the form from an existing row so the user can tweak and save.
+  const cloneSubmit = (row) => {
+    setData((prev) => [{ ...row, id: newId(), ...stampNow() }, ...prev])
+    log('create', 'Cloned record', `Copied into ${row.issuer || 'issuer'}`, {
+      fields: rowFields(row),
+      preview: snapshot({ after: row }),
+    })
+    setCloneRow(null)
     setQuery('')
   }
 
@@ -97,6 +207,46 @@ export default function BinTable() {
         return { ...rest, [colKey]: rest[colKey] ?? defaultValue, updatedBy, updatedAt }
       })
     )
+    const sample = data[0]
+    const nextCols = [...formColumns, colKey]
+    log('column', 'Added column', `Applied to ${data.length} records`, {
+      fields: [
+        { field: 'New column', after: label.trim() },
+        ...(defaultValue ? [{ field: 'Default value', after: defaultValue }] : []),
+      ],
+      preview: sample
+        ? {
+            columns: nextCols,
+            labels: Object.fromEntries(
+              nextCols.map((c) => [c, c === colKey ? label.trim() : columnLabels[c] || humanize(c)])
+            ),
+            before: sample,
+            after: { ...sample, [colKey]: defaultValue },
+            changedCols: [colKey],
+            newColumn: colKey,
+          }
+        : undefined,
+    })
+  }
+
+  // Rename a column header. Only the display label changes — the underlying
+  // data key stays put so rows, exports and uploads keep working.
+  const renameColumn = (col, nextLabel) => {
+    const before = columnLabels[col] || humanize(col)
+    setColumnLabels((prev) => ({ ...prev, [col]: nextLabel }))
+    log('rename', 'Renamed column', 'Column header changed', {
+      field: 'Header',
+      before,
+      after: nextLabel,
+    })
+  }
+
+  // Block renaming a header to a name another column already uses.
+  const validateHeader = (col, nextLabel) => {
+    const taken = columns.some(
+      (c) => c !== col && norm(columnLabels[c] || humanize(c)) === norm(nextLabel)
+    )
+    return taken ? 'Another column already uses this name.' : null
   }
 
   // Apply uploaded values for a single custom column, matched by Issuer so all
@@ -115,19 +265,60 @@ export default function BinTable() {
     setData((prev) =>
       prev.map((row) => (row.id === editRow.id ? { ...row, ...next, ...stampNow() } : row))
     )
+    // Only report the fields that actually changed.
+    const changed = Object.keys(next)
+      .filter((k) => String(next[k] ?? '') !== String(editRow[k] ?? ''))
+      .map((k) => ({
+        field: columnLabels[k] || humanize(k),
+        before: editRow[k] ?? '',
+        after: next[k] ?? '',
+      }))
+    log(
+      'update',
+      'Updated record',
+      `${next.issuer || editRow.issuer} (BIN ${next.binIin || editRow.binIin})`,
+      {
+        ...(changed.length ? { fields: changed } : {}),
+        preview: snapshot({
+          before: editRow,
+          after: { ...editRow, ...next },
+          changedCols: Object.keys(next).filter(
+            (k) => String(next[k] ?? '') !== String(editRow[k] ?? '')
+          ),
+        }),
+      }
+    )
     setEditRow(null)
   }
 
   // Inline single-cell edit.
   const saveCell = (rowId, col, value) => {
+    const target = data.find((r) => r.id === rowId)
     setData((prev) =>
       prev.map((row) => (row.id === rowId ? { ...row, [col]: value, ...stampNow() } : row))
     )
+    const label = columnLabels[col] || humanize(col)
+    log('update', 'Edited cell', `${target?.issuer || 'Record'}`, {
+      field: label,
+      before: target?.[col] ?? '',
+      after: value,
+      preview: target
+        ? snapshot({
+            before: target,
+            after: { ...target, [col]: value },
+            changedCols: [col],
+          })
+        : undefined,
+    })
   }
 
   const confirmDelete = () => {
     if (!deleteRow) return
     setData((prev) => prev.filter((row) => row.id !== deleteRow.id))
+    log('delete', 'Deleted record', `${deleteRow.issuer} (BIN ${deleteRow.binIin})`, {
+      fields: rowFields(deleteRow, 'before'),
+      preview: snapshot({ before: deleteRow }),
+    })
     setDeleteRow(null)
   }
 
@@ -210,6 +401,14 @@ export default function BinTable() {
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Export</span>
           </button>
+          <button
+            onClick={() => setShowHistory(true)}
+            title="View the last 5 changes to this table"
+            className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
+          >
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Version History</span>
+          </button>
           {perms.canCreate && (
             <button
               onClick={() => setShowAdd(true)}
@@ -250,8 +449,12 @@ export default function BinTable() {
                   key={col}
                   className="whitespace-nowrap bg-white px-5 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400"
                 >
-                  <span className="inline-flex items-center gap-1.5">
-                    {columnLabels[col] || humanize(col)}
+                  <EditableHeader
+                    value={columnLabels[col] || humanize(col)}
+                    canEdit={perms.canEdit}
+                    validate={(next) => validateHeader(col, next)}
+                    onSave={(next) => renameColumn(col, next)}
+                  >
                     {customColumns.has(col) && perms.canUpload && (
                       <button
                         type="button"
@@ -262,7 +465,7 @@ export default function BinTable() {
                         <Upload className="h-3.5 w-3.5" />
                       </button>
                     )}
-                  </span>
+                  </EditableHeader>
                 </th>
               ))}
               <th className="w-12 bg-white px-5 py-2" />
@@ -332,6 +535,7 @@ export default function BinTable() {
                   {(perms.canEdit || perms.canDelete) && (
                     <RowActionsMenu
                       onEdit={perms.canEdit ? () => setEditRow(row) : undefined}
+                      onClone={perms.canCreate ? () => setCloneRow(row) : undefined}
                       onDelete={perms.canDelete ? () => setDeleteRow(row) : undefined}
                     />
                   )}
@@ -380,6 +584,7 @@ export default function BinTable() {
               placeholder: 'Select an instance',
             },
           ]}
+          validateRow={(form) => duplicateIssuer(form)}
           onClose={() => setShowAdd(false)}
           onSubmit={addRow}
         />
@@ -390,14 +595,45 @@ export default function BinTable() {
           labels={columnLabels}
           examples={data[0]}
           initial={editRow}
+          validateRow={(form) => duplicateIssuer(form, editRow.id)}
           onClose={() => setEditRow(null)}
           onSubmit={saveEdit}
+        />
+      )}
+      {cloneRow && (
+        <AddRowModal
+          columns={formColumns}
+          labels={columnLabels}
+          examples={data[0]}
+          initial={cloneRow}
+          title="Clone BIN Record"
+          subtitle="Review the copied values, then save as a new record"
+          submitLabel="Create Clone"
+          selectFields={[
+            {
+              name: 'instance',
+              label: 'Instance',
+              options: instances.map((i) => i.name),
+              placeholder: 'Select an instance',
+            },
+          ]}
+          validateRow={(form) => duplicateIssuer(form)}
+          onClose={() => setCloneRow(null)}
+          onSubmit={cloneSubmit}
         />
       )}
       {deleteRow && (
         <DeleteRowModal
           onClose={() => setDeleteRow(null)}
           onConfirm={confirmDelete}
+        />
+      )}
+      {showHistory && (
+        <VersionHistoryModal
+          title="Version History"
+          subtitle="Last 5 changes to the BIN Series table"
+          entries={changeLog}
+          onClose={() => setShowHistory(false)}
         />
       )}
       {showAddColumn && (

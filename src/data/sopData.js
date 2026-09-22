@@ -307,6 +307,8 @@ const bulk = Array.from({ length: BULK_COUNT }, (_, i) => {
     id: `issuer-${n}`,
     name,
     classification: classifications[n % classifications.length],
+    // Every 7th issuer is deactivated so the Inactive list has sample data.
+    status: n % 7 === 0 ? 'Inactive' : 'Active',
     ...editorStamp(n),
     // vary row counts so some sheets are big (stress test)
     subsheets: bulkSheets(name, domain, n, 40 + (n % 12) * 30),
@@ -333,6 +335,8 @@ export const instances = INSTANCE_NAMES.map((name, i) => ({
   id: `inst-${i + 1}`,
   name,
   description: `${name} issuer group`,
+  status: 'Active',
+  ...editorStamp(i),
   issuerIds: merchants.filter((_, idx) => idx % INSTANCE_NAMES.length === i).map((m) => m.id),
 }))
 
@@ -342,6 +346,19 @@ export const issuersForInstance = (instance) => {
   return merchants.filter((m) => set.has(m.id))
 }
 
+// New instance created from the Instance Management screen.
+export function createInstance({ name, description = '', status = 'Active' }) {
+  const label = String(name || '').trim()
+  return {
+    id: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: label,
+    description: String(description || '').trim(),
+    status,
+    ...stampEditor(),
+    issuerIds: [],
+  }
+}
+
 export function createMerchant({ name, classification, manualEntry = false }) {
   const label = String(name || '').trim()
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'merchant'
@@ -349,6 +366,7 @@ export function createMerchant({ name, classification, manualEntry = false }) {
     id: `${slug}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     name: label,
     classification: String(classification || 'Digital Gift Card').trim(),
+    status: 'Active',
     manualEntry, // true when created via the manual "Create Merchant" form
     ...stampEditor(),
     // Manually created merchants start with NO SOP data — the detail page shows

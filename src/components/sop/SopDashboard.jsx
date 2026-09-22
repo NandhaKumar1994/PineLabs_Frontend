@@ -24,6 +24,19 @@ export default function SopDashboard() {
     setInitialKey(subsheetKey)
   }
 
+  // An issuer name must be unique within a single instance (the same name may
+  // legitimately exist in a different instance).
+  const isDuplicateInInstance = (instanceId, name) => {
+    const target = instances.find((inst) => inst.id === instanceId)
+    if (!target) return false
+    const wanted = String(name || '').trim().toLowerCase()
+    if (!wanted) return false
+    const ids = new Set(target.issuerIds)
+    return issuerData.some(
+      (m) => ids.has(m.id) && m.name.trim().toLowerCase() === wanted
+    )
+  }
+
   // Step 3 — issuer SOP detail
   if (selected) {
     return (
@@ -66,6 +79,7 @@ export default function SopDashboard() {
           merchants={instanceIssuers}
           instances={instances}
           currentInstanceId={instance.id}
+          isDuplicateInInstance={isDuplicateInInstance}
           onMerchantsChange={(updater, targetInstanceId) => {
             const nextList =
               typeof updater === 'function' ? updater(instanceIssuers) : updater
