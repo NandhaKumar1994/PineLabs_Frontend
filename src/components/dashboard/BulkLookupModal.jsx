@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, FileSpreadsheet, AlertCircle, Download, Search } from 'lucide-react'
 import { parseCsv, serializeCsv, downloadCsv } from '../../utils/csv'
-import { binSeries } from '../../data/binSeries'
+import { binSeries, BIN_TYPES, BIN_TYPE_LIST } from '../../data/binSeries'
 import * as XLSX from 'xlsx'
 
 async function readTable(file) {
@@ -19,50 +19,79 @@ async function readTable(file) {
 
 const norm = (v) => String(v ?? '').trim().toLowerCase()
 
-// Resolve a single raw card value → issuer match using the 9-digit rule.
+// The upload sheet carries a single column: "Bin+Merchant Prefix", a 9-digit
+// value made of the 6-digit BIN followed by the 3-digit Merchant Prefix.
+const UPLOAD_COLUMN = 'Bin+Merchant Prefix'
+const PREFIX_LENGTH = 9
+
+// Resolve one 9-digit Bin+Merchant Prefix value against both BIN types.
 function resolve(raw) {
-  const digits = String(raw ?? '').replace(/\D/g, '')
+  const original = String(raw ?? '').trim()
+  const digits = original.replace(/\D/g, '')
   const bin = digits.slice(0, 6)
   const prefix = digits.slice(6, 9)
-  const input = digits.length > 6 ? `${bin} ${prefix}` : bin
-  if (digits.length < 6) {
-    return { input: String(raw ?? '').trim(), bin, prefix, issuer: '', program: '', binSeriesNo: '' }
+
+  const base = {
+    input: original,
+    digits,
+    binIin: bin,
+    merchantPrefix: prefix,
+    matched: false,
+    typeKey: '',
+    binType: '',
+    note: '',
   }
-  const candidates = binSeries.filter((r) => r.binIin === bin)
-  let hit = null
-  if (candidates.length) {
-    if (prefix.length === 3) hit = candidates.find((r) => r.merchantPrefix === prefix) || null
-    else if (candidates.length === 1) hit = candidates[0]
+
+  // Must be exactly 9 digits: 6 (BIN) + 3 (Merchant Prefix).
+  if (digits.length !== PREFIX_LENGTH) {
+    return {
+      ...base,
+      note:
+        digits.length < PREFIX_LENGTH
+          ? `Expected ${PREFIX_LENGTH} digits, got ${digits.length}`
+          : `Expected ${PREFIX_LENGTH} digits, got ${digits.length}`,
+    }
   }
+
+  const hit = binSeries.find((r) => r.binIin === bin && r.merchantPrefix === prefix)
+  if (!hit) return { ...base, note: 'No matching BIN series' }
+
+  // Carry the whole matched record so the results table can show the same
+  // columns as the BIN Series landing page.
   return {
-    input,
-    bin,
-    prefix,
-    issuer: hit?.issuer || '',
-    program: hit?.cardProgramGroupName || '',
-    binSeriesNo: hit ? `${hit.binIin}${hit.merchantPrefix}` : '',
+    ...base,
+    ...hit,
+    matched: true,
+    typeKey: hit.binType,
+    binType: BIN_TYPES[hit.binType]?.label || '',
   }
 }
 
-// Pull card-number-like values from an arbitrary uploaded table.
-function extractCards(table) {
+// Read the Bin+Merchant Prefix values out of the uploaded sheet.
+// The header row is optional; any cell holding 9 digits is accepted.
+function extractPrefixes(table) {
   const clean = (table || [])
     .map((r) => (Array.isArray(r) ? r : []))
     .filter((r) => r.some((v) => String(v ?? '').trim()))
   if (!clean.length) return []
 
-  // Find a "card" column if the first row looks like a header.
+  // Detect the target column from the header, if one is present.
   const first = clean[0].map((c) => norm(c))
-  const cardIdx = first.findIndex((h) => h.includes('card') || h.includes('number') || h.includes('bin'))
-  const hasHeader = cardIdx !== -1 || first.some((h) => h && !/\d/.test(h))
-  const body = hasHeader ? clean.slice(1) : clean
+  let colIdx = first.findIndex(
+    (h) => h.includes('bin') || h.includes('prefix') || h.includes('card')
+  )
+  // A row whose cells contain no digits is treated as a header row.
+  const headerRow = clean[0].every((c) => !/\d/.test(String(c ?? '')))
+  const body = colIdx !== -1 || headerRow ? clean.slice(1) : clean
+  if (colIdx === -1) colIdx = 0
 
   const values = []
   body.forEach((cells) => {
-    // Prefer the detected card column; otherwise take the first cell with 6+ digits.
-    let val = cardIdx !== -1 ? cells[cardIdx] : ''
-    if (!String(val ?? '').replace(/\D/g, '')) {
-      val = cells.find((c) => String(c ?? '').replace(/\D/g, '').length >= 6) ?? cells[0]
+    let val = cells[colIdx]
+    // Fall back to the first cell that looks like a 9-digit prefix.
+    if (String(val ?? '').replace(/\D/g, '').length !== PREFIX_LENGTH) {
+      const alt = cells.find((c) => String(c ?? '').replace(/\D/g, '').length === PREFIX_LENGTH)
+      if (alt !== undefined) val = alt
     }
     if (String(val ?? '').trim()) values.push(String(val).trim())
   })
@@ -88,34 +117,47 @@ export default function BulkLookupModal({ onClose }) {
     setError('')
     try {
       const table = await readTable(f)
-      const cards = extractCards(table)
-      if (!cards.length) {
-        setError('No card numbers found in the file.')
+      const prefixes = extractPrefixes(table)
+      if (!prefixes.length) {
+        setError(`No values found. The sheet needs a single “${UPLOAD_COLUMN}” column.`)
         setResults([])
         return
       }
-      setResults(cards.map(resolve))
+      setResults(prefixes.map(resolve))
     } catch {
       setError('Could not read that file.')
       setResults([])
     }
   }
 
+  const matchedCount = results.filter((r) => r.matched).length
+  const unresolved = results.filter((r) => !r.matched)
+
   const downloadSample = () => {
-    const cols = ['card']
-    const labels = { card: 'Card Number' }
-    const rows = [{ card: '401288001' }, { card: '552461004' }, { card: '340000002' }]
-    downloadCsv('sample-card-numbers.csv', serializeCsv(cols, labels, rows))
+    const cols = ['prefix']
+    const labels = { prefix: UPLOAD_COLUMN }
+    // 6-digit BIN + 3-digit Merchant Prefix = 9 digits.
+    const rows = [
+      { prefix: '401288001' },
+      { prefix: '552461004' },
+      { prefix: '621501101' },
+    ]
+    downloadCsv('sample-bin-merchant-prefix.csv', serializeCsv(cols, labels, rows))
   }
 
+  // Export uses the union of both types' landing-page columns so a mixed
+  // upload produces a single sheet without losing any field.
   const exportResults = () => {
-    const cols = ['input', 'binSeriesNo', 'issuer', 'program']
+    const union = []
+    BIN_TYPE_LIST.forEach((t) => t.columns.forEach((c) => union.includes(c) || union.push(c)))
+    const cols = ['input', 'binType', ...union, 'updatedBy', 'note']
     const labels = {
-      input: 'Card Number',
-      binSeriesNo: 'BIN Series Number',
-      issuer: 'Issuer',
-      program: 'Card Program',
+      input: UPLOAD_COLUMN,
+      binType: 'BIN Type',
+      updatedBy: 'Updated By',
+      note: 'Remarks',
     }
+    BIN_TYPE_LIST.forEach((t) => Object.assign(labels, t.labels))
     downloadCsv('bin-lookup-results.csv', serializeCsv(cols, labels, results))
   }
 
@@ -123,7 +165,7 @@ export default function BulkLookupModal({ onClose }) {
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      <div className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full max-w-[96rem] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/5 text-primary">
@@ -132,7 +174,7 @@ export default function BulkLookupModal({ onClose }) {
             <div>
               <h2 className="text-sm font-bold text-heading">Bulk Issuer Lookup</h2>
               <p className="text-xs text-body">
-                Upload a sheet of card numbers to resolve their BIN Series &amp; Issuer
+                Upload a sheet of Bin+Merchant Prefix values to resolve each Issuer
               </p>
             </div>
           </div>
@@ -147,7 +189,10 @@ export default function BulkLookupModal({ onClose }) {
         </div>
 
         <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-grey-light/50 px-5 py-2.5">
-          <p className="text-xs text-body">One column of card numbers. Need a template?</p>
+          <p className="text-xs text-body">
+            Single column <span className="font-semibold text-heading">{UPLOAD_COLUMN}</span> — 9
+            digits (6-digit BIN + 3-digit Merchant Prefix).
+          </p>
           <button
             type="button"
             onClick={downloadSample}
@@ -178,7 +223,9 @@ export default function BulkLookupModal({ onClose }) {
             <p className="text-sm font-semibold text-heading">
               {file ? file.name : 'Drop a CSV or Excel file'}
             </p>
-            <p className="mt-0.5 text-xs text-body">Contains one or more card numbers</p>
+            <p className="mt-0.5 text-xs text-body">
+              One or more {UPLOAD_COLUMN} values
+            </p>
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
@@ -206,32 +253,104 @@ export default function BulkLookupModal({ onClose }) {
           )}
 
           {results.length > 0 && !error && (
-            <div className="overflow-hidden rounded-xl border border-gray-200">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-grey-light text-[11px] uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">Card Number</th>
-                    <th className="px-3 py-2 font-semibold">BIN Series Number</th>
-                    <th className="px-3 py-2 font-semibold">Issuer</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {results.map((r, i) => (
-                    <tr key={i} className="align-top">
-                      <td className="px-3 py-2 font-semibold tracking-wide text-heading">{r.input || '—'}</td>
-                      <td className="px-3 py-2 font-medium text-body">{r.binSeriesNo || '—'}</td>
-                      <td className="px-3 py-2">
-                        {r.issuer ? (
-                          <span className="font-semibold text-heading">{r.issuer}</span>
-                        ) : (
-                          <span className="text-gray-400">No match</span>
-                        )}
-                        {r.program && <span className="block text-[11px] text-body">{r.program}</span>}
-                      </td>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className="rounded-md bg-grey-light px-2.5 py-1 text-body">
+                {results.length} row{results.length === 1 ? '' : 's'}
+              </span>
+              <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                {matchedCount} resolved
+              </span>
+              {unresolved.length > 0 && (
+                <span className="rounded-md bg-red-50 px-2.5 py-1 text-red-600">
+                  {unresolved.length} unresolved
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* One table per BIN type, using that type's landing-page columns */}
+          {!error &&
+            BIN_TYPE_LIST.map((t) => {
+              const rows = results.filter((r) => r.matched && r.typeKey === t.key)
+              if (!rows.length) return null
+              const cols = [...t.columns, 'updatedBy']
+              const labels = { ...t.labels, updatedBy: 'Updated By' }
+              return (
+                <div key={t.key} className="space-y-1.5">
+                  <p className="flex items-center gap-2 text-xs font-bold text-heading">
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                      {t.label}
+                    </span>
+                    <span className="font-normal text-body">
+                      {rows.length} record{rows.length === 1 ? '' : 's'}
+                    </span>
+                  </p>
+                  <div className="nice-scroll overflow-x-auto rounded-xl border border-gray-200">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-grey-light text-[11px] uppercase tracking-wide text-gray-500">
+                        <tr>
+                          {cols.map((c) => (
+                            <th key={c} className="whitespace-nowrap px-3 py-2 font-semibold">
+                              {labels[c]}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {rows.map((r, i) => (
+                          <tr key={i}>
+                            {cols.map((c) => (
+                              <td
+                                key={c}
+                                className={`whitespace-nowrap px-3 py-2 ${
+                                  c === 'issuer'
+                                    ? 'font-semibold text-heading'
+                                    : 'text-body'
+                                }`}
+                              >
+                                {String(r[c] ?? '') || <span className="text-gray-300">—</span>}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })}
+
+          {/* Rows that could not be resolved */}
+          {!error && unresolved.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="flex items-center gap-2 text-xs font-bold text-heading">
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                  Unresolved
+                </span>
+                <span className="font-normal text-body">
+                  {unresolved.length} row{unresolved.length === 1 ? '' : 's'}
+                </span>
+              </p>
+              <div className="overflow-hidden rounded-xl border border-gray-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-grey-light text-[11px] uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Uploaded Value</th>
+                      <th className="px-3 py-2 font-semibold">Reason</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {unresolved.map((r, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-2 font-semibold text-heading">{r.input || '—'}</td>
+                        <td className="px-3 py-2 text-xs font-medium text-red-500">
+                          {r.note || 'No match'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

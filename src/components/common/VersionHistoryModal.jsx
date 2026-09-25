@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, History, Plus, Pencil, Trash2, Upload, Columns3, Type, ArrowRight, Eye } from 'lucide-react'
+import { X, History, Plus, Pencil, Trash2, Upload, Columns3, Type, ArrowRight, Eye, Ticket } from 'lucide-react'
 import ChangePreviewModal from './ChangePreviewModal'
 
 const actionMeta = {
@@ -153,7 +153,15 @@ export default function VersionHistoryModal({ title, subtitle, entries = [], lim
                         </div>
                       )}
 
-                      {e.by && <p className="mt-1.5 text-[11px] text-gray-400">by {e.by}</p>}
+                      <div className="mt-1.5 flex items-center gap-2">
+                        {e.ticket && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                            <Ticket className="h-2.5 w-2.5" />
+                            {e.ticket}
+                          </span>
+                        )}
+                        {e.by && <p className="text-[11px] text-gray-400">by {e.by}</p>}
+                      </div>
                     </div>
                   </li>
                 )

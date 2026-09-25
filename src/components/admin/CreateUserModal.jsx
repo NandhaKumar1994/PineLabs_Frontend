@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { X, UserPlus, Search, Check, ChevronDown, ChevronRight } from 'lucide-react'
-import { merchants } from '../../data/sopData'
+import { X, UserPlus, Search, Check, ChevronDown, ChevronRight, Layers } from 'lucide-react'
+import { merchants, instances } from '../../data/sopData'
+import MultiSelect from '../common/MultiSelect'
 
 const roles = ['Admin', 'SME', 'Automation', 'Viewer']
 
@@ -10,14 +11,38 @@ export default function CreateUserModal({ onClose, onCreate }) {
   const [access, setAccess] = useState({})
   const [expanded, setExpanded] = useState(null)
   const [merchantQuery, setMerchantQuery] = useState('')
+  // One or more instances; the issuer list below is scoped to these.
+  const [instanceIds, setInstanceIds] = useState([])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  const instanceOptions = useMemo(
+    () =>
+      instances.map((i) => ({
+        value: i.id,
+        label: i.name,
+        hint: `${i.issuerIds.length} issuers`,
+      })),
+    []
+  )
+
+  // Issuers belonging to any of the selected instances.
+  const instanceMerchants = useMemo(() => {
+    if (!instanceIds.length) return []
+    const ids = new Set()
+    instanceIds.forEach((id) => {
+      instances.find((i) => i.id === id)?.issuerIds.forEach((iid) => ids.add(iid))
+    })
+    return merchants.filter((m) => ids.has(m.id))
+  }, [instanceIds])
 
   // Full set that matches the current search (used by Select all).
   const matchingMerchants = useMemo(() => {
     const q = merchantQuery.trim().toLowerCase()
-    return q ? merchants.filter((m) => m.name.toLowerCase().includes(q)) : merchants
-  }, [merchantQuery])
+    return q
+      ? instanceMerchants.filter((m) => m.name.toLowerCase().includes(q))
+      : instanceMerchants
+  }, [merchantQuery, instanceMerchants])
 
   // Only render a capped slice for performance.
   const filteredMerchants = useMemo(() => matchingMerchants.slice(0, 60), [matchingMerchants])
@@ -69,7 +94,21 @@ export default function CreateUserModal({ onClose, onCreate }) {
       return next
     })
 
-  const valid = form.name.trim() && form.email.trim() && form.role
+  // Changing the instance scope drops any issuer picks that no longer apply.
+  const changeInstances = (ids) => {
+    setInstanceIds(ids)
+    const keep = new Set()
+    ids.forEach((id) => {
+      instances.find((i) => i.id === id)?.issuerIds.forEach((iid) => keep.add(iid))
+    })
+    setAccess((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([mid]) => keep.has(mid)))
+    )
+    setExpanded(null)
+    setMerchantQuery('')
+  }
+
+  const valid = form.name.trim() && form.email.trim() && form.role && instanceIds.length > 0
 
   const submit = (e) => {
     e.preventDefault()
@@ -77,7 +116,7 @@ export default function CreateUserModal({ onClose, onCreate }) {
     const accessPayload = Object.fromEntries(
       Object.entries(access).map(([id, set]) => [id, [...set]])
     )
-    onCreate?.({ ...form, access: accessPayload })
+    onCreate?.({ ...form, instanceIds, access: accessPayload })
     onClose()
   }
 
@@ -131,16 +170,66 @@ export default function CreateUserModal({ onClose, onCreate }) {
             </Field>
           </div>
 
+          {/* instance scope — drives which issuers are listed below */}
+          <div>
+            <div className="mb-1 flex items-center gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">
+                <Layers className="h-3.5 w-3.5" />
+              </span>
+              <p className="text-sm font-semibold text-heading">
+                Instance <span className="text-red-500">*</span>
+              </p>
+              {instanceIds.length > 0 && (
+                <span className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                  {instanceIds.length} selected · {instanceMerchants.length} issuers
+                </span>
+              )}
+            </div>
+            <p className="mb-2 text-xs text-body">
+              Choose one or more instances. Only their issuers appear below.
+            </p>
+            <MultiSelect
+              options={instanceOptions}
+              selected={instanceIds}
+              onChange={changeInstances}
+              placeholder="Select instances…"
+              searchPlaceholder="Search instances…"
+              allLabel="Select all instances"
+            />
+          </div>
+
           {/* merchant + subsheet access */}
           <div>
-            <div className="mb-1">
+            <div className="mb-1 flex items-center gap-2">
               <p className="text-sm font-semibold text-heading">Issuer SOP Access</p>
-              <p className="text-xs text-body">
-                Select issuers and configure which SOP menus (Block, Activation, POC…) the
-                user sees. <span className="font-medium text-heading">{selectedMerchantCount}</span> issuer(s) enabled.
-              </p>
+              {instanceIds.length > 0 && (
+                <span
+                  className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                    selectedMerchantCount
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-grey-light text-body'
+                  }`}
+                >
+                  {selectedMerchantCount} issuer{selectedMerchantCount === 1 ? '' : 's'} enabled
+                </span>
+              )}
             </div>
+            <p className="text-xs text-body">
+              {instanceIds.length
+                ? 'Tick an issuer to grant all its SOP menus, or expand it to pick individual menus.'
+                : 'Choose an instance first to load its issuers.'}
+            </p>
 
+            {!instanceIds.length ? (
+              <div className="mt-2 rounded-lg border border-dashed border-gray-200 bg-grey-light/50 px-4 py-8 text-center">
+                <Layers className="mx-auto h-6 w-6 text-gray-300" />
+                <p className="mt-2 text-sm font-medium text-heading">No instance selected</p>
+                <p className="mt-0.5 text-xs text-body">
+                  Pick an instance above to configure issuer-level SOP access.
+                </p>
+              </div>
+            ) : (
+              <>
             <div className="relative my-2">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
@@ -173,7 +262,7 @@ export default function CreateUserModal({ onClose, onCreate }) {
                 </span>
               </button>
 
-              <div className="max-h-64 divide-y divide-gray-100 overflow-auto">
+              <div className="nice-scroll max-h-64 divide-y divide-gray-100 overflow-auto">
               {filteredMerchants.map((m) => {
                 const on = isMerchantOn(m.id)
                 const open = expanded === m.id
@@ -234,8 +323,22 @@ export default function CreateUserModal({ onClose, onCreate }) {
                   </div>
                 )
               })}
+              {matchingMerchants.length === 0 && (
+                <p className="px-3 py-8 text-center text-sm text-body">
+                  No issuer found{merchantQuery.trim() ? ` for “${merchantQuery}”` : ''}.
+                </p>
+              )}
               </div>
+
+              {matchingMerchants.length > filteredMerchants.length && (
+                <p className="border-t border-gray-100 bg-grey-light/60 px-3 py-1.5 text-center text-[11px] text-body">
+                  Showing {filteredMerchants.length} of {matchingMerchants.length} — search to
+                  narrow, or use Select all to include every match.
+                </p>
+              )}
             </div>
+              </>
+            )}
           </div>
         </div>
 

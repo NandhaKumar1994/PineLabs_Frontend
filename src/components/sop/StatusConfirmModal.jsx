@@ -1,8 +1,20 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Power, PowerOff } from 'lucide-react'
+import TicketField, { isValidTicket } from '../common/TicketField'
 
-// Confirms activating / deactivating an issuer.
-export default function StatusConfirmModal({ issuer, deactivating, onClose, onConfirm }) {
+// Confirms activating / deactivating a record (issuer, BIN record, etc.).
+export default function StatusConfirmModal({
+  issuer,
+  name,
+  entityLabel = 'Issuer',
+  deactivating,
+  activeHint,
+  inactiveHint,
+  onClose,
+  onConfirm,
+}) {
+  const [ticket, setTicket] = useState('')
+
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -10,6 +22,13 @@ export default function StatusConfirmModal({ issuer, deactivating, onClose, onCo
   }, [onClose])
 
   const Icon = deactivating ? PowerOff : Power
+  const label = name ?? issuer?.name ?? ''
+
+  const hint = deactivating
+    ? inactiveHint ||
+      'It moves to the Inactive list and its SOP data stops being served to the automation system. You can reactivate it any time.'
+    : activeHint ||
+      'It moves back to the Active list and its SOP data is served to the automation system again.'
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -26,7 +45,7 @@ export default function StatusConfirmModal({ issuer, deactivating, onClose, onCo
               <Icon className="h-5 w-5" />
             </span>
             <h2 className="text-sm font-bold text-heading">
-              {deactivating ? 'Deactivate Issuer' : 'Activate Issuer'}
+              {deactivating ? `Deactivate ${entityLabel}` : `Activate ${entityLabel}`}
             </h2>
           </div>
           <button
@@ -42,13 +61,13 @@ export default function StatusConfirmModal({ issuer, deactivating, onClose, onCo
         <div className="px-5 py-4 text-sm text-body">
           <p>
             {deactivating ? 'Deactivate' : 'Activate'}{' '}
-            <span className="font-semibold text-heading">{issuer.name}</span>?
+            <span className="font-semibold text-heading">{label}</span>?
           </p>
-          <p className="mt-1.5 text-xs">
-            {deactivating
-              ? 'It moves to the Inactive list and its SOP data stops being served to the automation system. You can reactivate it any time.'
-              : 'It moves back to the Active list and its SOP data is served to the automation system again.'}
-          </p>
+          <p className="mt-1.5 text-xs">{hint}</p>
+
+          <div className="mt-3">
+            <TicketField autoFocus value={ticket} onChange={setTicket} />
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-200 px-5 py-3">
@@ -61,8 +80,9 @@ export default function StatusConfirmModal({ issuer, deactivating, onClose, onCo
           </button>
           <button
             type="button"
-            onClick={onConfirm}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition ${
+            disabled={!isValidTicket(ticket)}
+            onClick={() => onConfirm(ticket.trim())}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 ${
               deactivating ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
             }`}
           >

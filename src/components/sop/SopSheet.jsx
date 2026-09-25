@@ -12,9 +12,14 @@ import ColumnUploadModal from '../common/ColumnUploadModal'
 import EditableCell from '../common/EditableCell'
 import EditableHeader from '../common/EditableHeader'
 import VersionHistoryModal from '../common/VersionHistoryModal'
+import TicketCaptureModal from '../common/TicketCaptureModal'
 import { useChangeLog } from '../../hooks/useChangeLog'
 
-const groupTint = ['bg-primary/5 text-primary', 'bg-amber-50 text-amber-700', 'bg-teal-50 text-teal-700']
+// Opaque tints — sticky headers must fully hide the rows scrolling beneath.
+const groupTint = ['bg-[#eef5f4] text-primary', 'bg-amber-50 text-amber-700', 'bg-teal-50 text-teal-700']
+
+// Height of the first (group) header row, used to offset the second row.
+const GROUP_ROW_H = 34
 
 const newRowId = () => `sop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
@@ -35,6 +40,8 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
   const [customColsByKey, setCustomColsByKey] = useState({})
   const [uploadColumn, setUploadColumn] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
+  // Pending inline cell edit awaiting a ticket number.
+  const [pendingCell, setPendingCell] = useState(null)
 
   // Recent-change log for this sheet (seeded so the panel has prior context).
   const { entries: changeLog, log } = useChangeLog([
@@ -142,17 +149,27 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
     onRowsChange?.(sheet.key, list)
   }
 
-  // Inline single-cell edit.
+  // Inline single-cell edit — staged until a ticket number is captured.
   const saveCell = (rowId, col, value) => {
     const current = rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)
-    const before = current.find((r) => r._rowId === rowId)?.[col]
-    const list = current.map((r) => (r._rowId === rowId ? { ...r, [col]: value } : r))
-    commitRows(list)
+    const before = current.find((r) => r._rowId === rowId)?.[col] ?? ''
+    // Nothing actually changed — skip the ticket prompt.
+    if (String(value) === String(before)) return
+    setPendingCell({ rowId, col, value, before })
+  }
+
+  // Commit the staged cell edit once the ticket is supplied.
+  const commitCell = (ticket) => {
+    if (!pendingCell) return
+    const { rowId, col, value, before } = pendingCell
+    const current = rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)
     const target = current.find((r) => r._rowId === rowId)
-    log('update', 'Edited cell', sheet.name, {
+    commitRows(current.map((r) => (r._rowId === rowId ? { ...r, [col]: value } : r)))
+    log('update', 'Edited cell', `${sheet.name} · Ticket ${ticket}`, {
       field: col,
-      before: before ?? '',
+      before,
       after: value,
+      ticket,
       preview: target
         ? snapshot({
             before: target,
@@ -161,6 +178,7 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
           })
         : undefined,
     })
+    setPendingCell(null)
   }
 
   // Add a new column to the sheet: update groups and fill every row with the
@@ -292,16 +310,17 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
     newColumn,
   })
 
-  const addRow = (row) => {
+  const addRow = (row, ticket) => {
     commitRows([{ ...row, _rowId: newRowId() }, ...(rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key))])
-    log('create', 'Added row', `New row in ${sheet.name}`, {
+    log('create', 'Added row', `New row in ${sheet.name} · Ticket ${ticket}`, {
       fields: rowFields(row),
+      ticket,
       preview: snapshot({ after: row }),
     })
     setQuery('')
   }
 
-  const saveEdit = (next) => {
+  const saveEdit = (next, ticket) => {
     if (!editRow) return
     const list = (rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)).map((r) =>
       r._rowId === editRow._rowId ? { ...r, ...next, _rowId: editRow._rowId } : r
@@ -310,8 +329,9 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
     const changed = flatColumns
       .filter((c) => String(next[c] ?? '') !== String(editRow[c] ?? ''))
       .map((c) => ({ field: c, before: editRow[c] ?? '', after: next[c] ?? '' }))
-    log('update', 'Updated row', `Row edited in ${sheet.name}`, {
+    log('update', 'Updated row', `Row edited in ${sheet.name} · Ticket ${ticket}`, {
       ...(changed.length ? { fields: changed } : {}),
+      ticket,
       preview: snapshot({
         before: editRow,
         after: { ...editRow, ...next },
@@ -321,11 +341,12 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
     setEditRow(null)
   }
 
-  const confirmDelete = () => {
+  const confirmDelete = (ticket) => {
     if (!deleteRow) return
     commitRows((rowsByKey[sheet.key] ?? tagRows(sheet.rows, sheet.key)).filter((r) => r._rowId !== deleteRow._rowId))
-    log('delete', 'Deleted row', `Row removed from ${sheet.name}`, {
+    log('delete', 'Deleted row', `Row removed from ${sheet.name} · Ticket ${ticket}`, {
       fields: rowFields(deleteRow, 'before'),
+      ticket,
       preview: snapshot({ before: deleteRow }),
     })
     setDeleteRow(null)
@@ -344,90 +365,57 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* toolbar */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          {title && (
-            <div className="flex items-center gap-2">
-              <h3 className="whitespace-nowrap text-sm font-bold text-heading">{title}</h3>
-              <span className="rounded-full bg-grey-light px-2 py-0.5 text-[11px] font-medium text-body">
-                {data.length}
-              </span>
-              <span className="hidden h-5 w-px bg-gray-200 sm:block" />
-            </div>
-          )}
-          <div className="relative w-52 sm:w-64">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search this sheet…"
-              className="w-full rounded-lg border border-gray-200 bg-grey-light py-1.5 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
-            />
+      <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 py-2">
+        {title && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <h3 className="whitespace-nowrap text-sm font-bold text-heading">{title}</h3>
+            <span className="rounded-full bg-grey-light px-1.5 py-0.5 text-[10px] font-bold text-body">
+              {data.length}
+            </span>
           </div>
+        )}
+        <div className="relative w-40 shrink-0 lg:w-52">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search…"
+            className="w-full rounded-lg border border-gray-200 bg-grey-light py-1.5 pl-8 pr-3 text-sm outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
+          />
         </div>
+        <span className="ml-auto" />
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowHistory(true)}
-            title="View the last 5 changes to this sheet"
-            className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
-          >
-            <History className="h-4 w-4" />
-            <span className="hidden sm:inline">Version History</span>
-          </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <IconBtn icon={History} label="Version History" onClick={() => setShowHistory(true)} />
           {enableAddRow && perms.canCreate && (
-            <button
-              type="button"
-              onClick={() => setShowAdd(true)}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Row</span>
-            </button>
+            <IconBtn icon={Plus} label="Add Row" onClick={() => setShowAdd(true)} />
           )}
           {perms.canCreate && (
-            <button
-              type="button"
-              onClick={() => setShowAddColumn(true)}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
-            >
-              <Columns3 className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Column</span>
-            </button>
+            <IconBtn icon={Columns3} label="Add Column" onClick={() => setShowAddColumn(true)} />
           )}
           <button
             onClick={() => setShowFilters((v) => !v)}
-            className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+            className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
               showFilters || activeFilterCount
                 ? 'border-primary bg-primary/5 text-primary'
                 : 'border-gray-200 text-body hover:bg-grey-light'
             }`}
           >
-            <Filter className="h-4 w-4" />
+            <Filter className="h-3.5 w-3.5" />
             Filters
             {activeFilterCount > 0 && (
-              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[11px] font-bold text-white">
+              <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
                 {activeFilterCount}
               </span>
             )}
             <ChevronDown
-              className={`h-3.5 w-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`}
+              className={`h-3 w-3 transition-transform ${showFilters ? 'rotate-180' : ''}`}
             />
           </button>
           {activeFilterCount > 0 && (
-            <button
-              onClick={() => setFilters({})}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light"
-            >
-              <X className="h-3.5 w-3.5" />
-              Clear
-            </button>
+            <IconBtn icon={X} label="Clear filters" onClick={() => setFilters({})} />
           )}
-          <button className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-body transition hover:bg-grey-light">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+          <IconBtn icon={Download} label="Export" />
         </div>
       </div>
 
@@ -460,14 +448,17 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
 
       {/* two-tier grouped table */}
       <div className="nice-scroll min-h-0 flex-1 overflow-auto">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead className="sticky top-0 z-20">
+        {/* border-separate keeps sticky <th> cells working (border-collapse
+            drops their backgrounds, letting rows show through) */}
+        <table className="w-full border-separate border-spacing-0 text-left text-sm">
+          <thead>
             <tr>
               {groups.map((g, gi) => (
                 <th
                   key={g.group}
                   colSpan={g.columns.length}
-                  className={`whitespace-nowrap border border-gray-200 px-4 py-2 text-center text-xs font-bold uppercase tracking-wide ${
+                  style={{ top: 0 }}
+                  className={`sticky z-30 whitespace-nowrap border-b border-r border-gray-200 px-4 py-2 text-center text-xs font-bold uppercase tracking-wide ${
                     groupTint[gi % groupTint.length]
                   }`}
                 >
@@ -480,15 +471,20 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
                 </th>
               ))}
               {(perms.canEdit || perms.canDelete) && (
-                <th rowSpan={2} className="w-12 border border-gray-200 bg-white" />
+                <th
+                  rowSpan={2}
+                  style={{ top: 0 }}
+                  className="sticky z-30 w-12 border-b border-gray-200 bg-white"
+                />
               )}
             </tr>
             <tr>
               {flatColumns.map((col) => (
                 <th
                   key={col}
-                  className={`border border-gray-200 px-4 py-2 text-xs font-semibold ${
-                    filters[col] ? 'bg-primary/10 text-primary' : 'bg-grey-light text-heading'
+                  style={{ top: GROUP_ROW_H }}
+                  className={`sticky z-30 border-b border-r border-gray-200 px-4 py-2 text-xs font-semibold ${
+                    filters[col] ? 'bg-[#e6f0ef] text-primary' : 'bg-grey-light text-heading'
                   }`}
                 >
                   <EditableHeader
@@ -518,7 +514,7 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
                 {flatColumns.map((col) => (
                   <td
                     key={col}
-                    className="border border-gray-100 px-4 py-2 align-top text-body"
+                    className="border-b border-r border-gray-100 px-4 py-2 align-top text-body"
                   >
                     <EditableCell
                       value={row[col]}
@@ -529,7 +525,7 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
                   </td>
                 ))}
                 {(perms.canEdit || perms.canDelete) && (
-                  <td className="border border-gray-100 px-2 py-2 text-center">
+                  <td className="border-b border-gray-100 px-2 py-2 text-center">
                     <RowActionsMenu
                       onEdit={perms.canEdit ? () => setEditRow(row) : undefined}
                       onDelete={perms.canDelete ? () => setDeleteRow(row) : undefined}
@@ -585,9 +581,21 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
           columns={flatColumns}
           labels={columnLabels}
           examples={data[0]}
+          requireTicket
           onClose={() => setShowAdd(false)}
           onSubmit={addRow}
           groups={groups}
+        />
+      )}
+      {pendingCell && (
+        <TicketCaptureModal
+          title="Save Cell Change"
+          subtitle="Enter the ticket this edit relates to"
+          field={pendingCell.col}
+          before={pendingCell.before}
+          after={pendingCell.value}
+          onClose={() => setPendingCell(null)}
+          onConfirm={commitCell}
         />
       )}
       {editRow && (
@@ -596,6 +604,7 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
           labels={columnLabels}
           examples={data[0]}
           initial={editRow}
+          requireTicket
           onClose={() => setEditRow(null)}
           onSubmit={saveEdit}
           groups={groups}
@@ -620,7 +629,7 @@ export default function SopSheet({ sheet, title, merchantName, enableAddRow = tr
         />
       )}
       {deleteRow && (
-        <DeleteRowModal onClose={() => setDeleteRow(null)} onConfirm={confirmDelete} />
+        <DeleteRowModal requireTicket onClose={() => setDeleteRow(null)} onConfirm={confirmDelete} />
       )}
     </section>
   )
@@ -653,4 +662,22 @@ function CellValue({ value }) {
   if (v === 'NA' || v === 'No')
     return <span className="text-xs font-medium text-gray-400">{v}</span>
   return <span>{v}</span>
+}
+
+// Compact icon-only toolbar button with a hover tooltip.
+function IconBtn({ icon: Icon, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="group relative grid h-8 w-8 place-items-center rounded-lg border border-gray-200 text-body transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+    >
+      <Icon className="h-4 w-4" />
+      <span className="pointer-events-none absolute top-full z-30 mt-1 whitespace-nowrap rounded-md bg-heading px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition group-hover:opacity-100">
+        {label}
+      </span>
+    </button>
+  )
 }

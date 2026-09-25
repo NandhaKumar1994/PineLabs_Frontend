@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CreditCard, Copy, Check, ArrowRight, AlertCircle, Search, Upload } from 'lucide-react'
-import { binSeries } from '../../data/binSeries'
+import { binSeries, BIN_TYPES } from '../../data/binSeries'
 import { useRole } from '../../theme/RoleContext'
 import BulkLookupModal from './BulkLookupModal'
 
@@ -16,6 +16,7 @@ export default function BinResolver() {
 
   const match = useMemo(() => {
     if (digits.length < 6) return null
+    // Search Gift Card and Wallet BIN sets together.
     const candidates = binSeries.filter((r) => r.binIin === bin)
     if (!candidates.length) return null
     if (prefix.length === 3) {
@@ -188,8 +189,18 @@ function ResultCard({ resolved, copied, copy }) {
 
       <div className="mt-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-2xl font-extrabold text-heading">{resolved.issuer}</p>
-          <p className="mt-0.5 text-sm text-body">{resolved.cardProgramGroupName}</p>
+          <p className="flex items-center gap-2 truncate text-2xl font-extrabold text-heading">
+            <span className="truncate">{resolved.issuer}</span>
+            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-primary">
+              {BIN_TYPES[resolved.binType]?.label || 'Gift Card'}
+            </span>
+          </p>
+          <p className="mt-0.5 text-sm text-body">
+            {resolved.cardProgramGroupName || resolved.walletProgramName}
+            {resolved.merchant && (
+              <span className="text-gray-400"> · {resolved.merchant}</span>
+            )}
+          </p>
         </div>
         <button
           onClick={() => copy(resolved.issuer, 'issuer')}

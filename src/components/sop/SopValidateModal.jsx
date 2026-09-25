@@ -44,13 +44,21 @@ export default function SopValidateModal({ merchant, sheets, onClose }) {
           </button>
         </div>
 
-        {/* body scrolls; action sheet on top, POC + Escalation in one row below */}
-        <div className="flex-1 space-y-4 overflow-y-auto bg-grey-bg p-4">
-          {action && <SopSheet sheet={action} title={action.name} enableAddRow={false} />}
+        {/* body scrolls; action sheet on top, POC + Escalation in one row below.
+            Each sheet gets a capped height so its own table scrolls internally
+            instead of stretching the page. */}
+        <div className="nice-scroll flex-1 space-y-4 overflow-y-auto bg-grey-bg p-4">
+          {action && (
+            <div className="flex h-[22rem] flex-col">
+              <SopSheet sheet={action} title={action.name} enableAddRow={false} />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {refs.map((s) => (
-              <SopSheet key={s.key} sheet={s} title={s.name} enableAddRow={false} />
+              <div key={s.key} className="flex h-[18rem] flex-col">
+                <SopSheet sheet={s} title={s.name} enableAddRow={false} />
+              </div>
             ))}
           </div>
         </div>

@@ -21,7 +21,9 @@ export default function EditableCell({ value, onSave, canEdit = true, render }) 
 
   const commit = () => {
     const next = String(draft).trim()
-    if (next !== String(value ?? '')) onSave(next)
+    // Always hand the value back; the caller decides whether anything changed
+    // (it may need to capture a ticket number before committing).
+    onSave(next)
     setEditing(false)
   }
 

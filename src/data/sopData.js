@@ -334,8 +334,9 @@ const INSTANCE_NAMES = [
 export const instances = INSTANCE_NAMES.map((name, i) => ({
   id: `inst-${i + 1}`,
   name,
-  description: `${name} issuer group`,
   status: 'Active',
+  // Ticket the instance was created/last revised under.
+  ticket: `PL-${10200 + i * 13}`,
   ...editorStamp(i),
   issuerIds: merchants.filter((_, idx) => idx % INSTANCE_NAMES.length === i).map((m) => m.id),
 }))
@@ -347,13 +348,13 @@ export const issuersForInstance = (instance) => {
 }
 
 // New instance created from the Instance Management screen.
-export function createInstance({ name, description = '', status = 'Active' }) {
+export function createInstance({ name, status = 'Active', ticket = '' }) {
   const label = String(name || '').trim()
   return {
     id: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     name: label,
-    description: String(description || '').trim(),
     status,
+    ticket: String(ticket || '').trim(),
     ...stampEditor(),
     issuerIds: [],
   }

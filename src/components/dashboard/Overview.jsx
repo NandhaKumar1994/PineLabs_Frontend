@@ -115,12 +115,12 @@ export default function Overview() {
                 {revisions.slice(0, 5).map((r) => (
                   <tr key={r.id} className="hover:bg-primary/[0.03]">
                     <td className="px-4 py-2">
-                      <p className="text-sm font-medium text-heading">{r.user}</p>
-                      <p className="text-xs text-body">
-                        {r.action} Â· {r.entity}
+                      <p className="text-sm font-medium text-heading">{r.revisedBy}</p>
+                      <p className="truncate text-xs text-body">
+                        {r.issuer} · v{r.version}
                       </p>
                     </td>
-                    <td className="px-4 py-2 text-right text-xs text-body">{r.timestamp}</td>
+                    <td className="px-4 py-2 text-right text-xs text-body">{r.date}</td>
                   </tr>
                 ))}
               </tbody>
@@ -242,12 +242,12 @@ function OverviewT2() {
           {revisions.slice(0, 5).map((r) => (
             <li key={r.id} className="flex items-center justify-between px-5 py-2.5">
               <div>
-                <p className="text-sm font-medium text-heading">{r.user}</p>
+                <p className="text-sm font-medium text-heading">{r.revisedBy}</p>
                 <p className="text-xs text-body">
-                  {r.action} Â· {r.entity} Â· {r.target}
+                  {r.issuer} · v{r.version} · {r.description}
                 </p>
               </div>
-              <span className="text-xs text-body">{r.timestamp}</span>
+              <span className="text-xs text-body">{r.date}</span>
             </li>
           ))}
         </ul>

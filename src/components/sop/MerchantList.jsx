@@ -64,11 +64,13 @@ export default function MerchantList({
   const pager = usePagination(filtered, 24)
 
   // Flip an issuer between Active and Inactive (after confirmation).
-  const confirmStatusChange = () => {
+  const confirmStatusChange = (ticket) => {
     if (!statusTarget) return
     const next = isActive(statusTarget) ? 'Inactive' : 'Active'
     onMerchantsChange?.((prev) =>
-      prev.map((x) => (x.id === statusTarget.id ? { ...x, status: next, ...stampEditor() } : x))
+      prev.map((x) =>
+        x.id === statusTarget.id ? { ...x, status: next, ticket, ...stampEditor() } : x
+      )
     )
     setStatusTarget(null)
   }
@@ -110,18 +112,22 @@ export default function MerchantList({
   }
 
   // Manual single-merchant creation (flagged with manualEntry for the badge).
-  const createManualMerchant = ({ name, classification, instanceId, manualEntry }) => {
-    const merchant = createMerchant({ name, classification, manualEntry })
+  const createManualMerchant = ({ name, instanceId, revisedBy, reviewer, ticket, manualEntry }) => {
+    const merchant = createMerchant({ name, manualEntry })
+    Object.assign(merchant, { revisedBy, reviewer, ticket })
     onMerchantsChange?.((prev) => [merchant, ...prev], instanceId)
     setQuery('')
   }
 
   // Clone an issuer: copies its SOP sheets into a new issuer, into the chosen
   // instance, under a new (non-duplicate) name.
-  const cloneIssuer = ({ name, classification, instanceId }) => {
+  const cloneIssuer = ({ name, instanceId, revisedBy, reviewer, ticket }) => {
     if (!cloneSource) return
     const copy = {
-      ...createMerchant({ name, classification }),
+      ...createMerchant({ name, classification: cloneSource.classification }),
+      revisedBy,
+      reviewer,
+      ticket,
       // deep-ish copy so edits to the clone don't mutate the source
       subsheets: (cloneSource.subsheets || []).map((s) => ({
         ...s,
@@ -332,6 +338,20 @@ export default function MerchantList({
                       {m.subsheets.length} SOP sheets
                     </span>
                   </div>
+                  {(m.revisedBy || m.reviewer) && (
+                    <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-body">
+                      {m.revisedBy && (
+                        <span>
+                          Revised by <span className="font-medium text-heading">{m.revisedBy}</span>
+                        </span>
+                      )}
+                      {m.reviewer && (
+                        <span>
+                          Reviewer <span className="font-medium text-heading">{m.reviewer}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {m.updatedBy && (
                     <div className="mt-1 text-xs text-body">
                       <p className="flex items-center gap-1">
@@ -409,7 +429,8 @@ export default function MerchantList({
           defaultInstanceId={currentInstanceId}
           isDuplicateInInstance={isDuplicateInInstance}
           initialName={`${cloneSource.name} (Copy)`}
-          initialClassification={cloneSource.classification}
+          initialRevisedBy={cloneSource.revisedBy || ''}
+          initialReviewer={cloneSource.reviewer || ''}
           title="Clone Issuer"
           subtitle={`Copy “${cloneSource.name}” and its SOP sheets into an instance`}
           submitLabel="Create Clone"

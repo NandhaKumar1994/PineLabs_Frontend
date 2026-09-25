@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, X, FileSpreadsheet, AlertCircle, Eye, Trash2 } from 'lucide-react'
-import { identityValue, readSheetFile } from '../../utils/csv'
+import { Upload, X, FileSpreadsheet, AlertCircle, Eye, Trash2, Download } from 'lucide-react'
+import { identityValue, readSheetFile, serializeCsv, downloadCsv } from '../../utils/csv'
 
 const formatSize = (bytes = 0) => {
   if (bytes < 1024) return `${bytes} B`
@@ -18,6 +18,7 @@ export default function UploadSheetModal({
   entityLabel = 'issuer',
   existingHint,
   newHint,
+  sampleName,
   onClose,
   onUpdateExisting,
   onAddNew,
@@ -129,6 +130,18 @@ export default function UploadSheetModal({
     onClose()
   }
 
+  // Template carrying the exact header row this sheet expects, plus one
+  // example row taken from existing data so the format is unambiguous.
+  const downloadTemplate = () => {
+    const example = existingRows?.[0]
+    const rows = [
+      Object.fromEntries(
+        columns.map((c) => [c, example ? String(example[c] ?? '') : ''])
+      ),
+    ]
+    downloadCsv(sampleName || 'sample-upload.csv', serializeCsv(columns, labels, rows))
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -156,6 +169,20 @@ export default function UploadSheetModal({
             title="Close (Esc)"
           >
             <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-grey-light/50 px-5 py-2.5">
+          <p className="min-w-0 truncate text-xs text-body">
+            Expected columns: {columns.map((c) => labels[c] || c).join(', ')}
+          </p>
+          <button
+            type="button"
+            onClick={downloadTemplate}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/5"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Template
           </button>
         </div>
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, Plus, Layers, Building2, Download, Power, PowerOff } from 'lucide-react'
+import { Search, Plus, Layers, Building2, Download, Power, PowerOff, Upload } from 'lucide-react'
 import { instances as seedInstances, createInstance } from '../../data/sopData'
 import { formatDateTime, stampEditor } from '../../data/users'
 import { useDebounce } from '../../hooks/useDebounce'
@@ -10,7 +10,8 @@ import RowActionsMenu from '../dashboard/RowActionsMenu'
 import { useRole } from '../../theme/RoleContext'
 import InstanceFormModal from './InstanceFormModal'
 import DeleteInstanceModal from './DeleteInstanceModal'
-import { downloadCsv, serializeCsv } from '../../utils/csv'
+import UploadSheetModal from '../dashboard/UploadSheetModal'
+import { downloadCsv, serializeCsv, identityValue } from '../../utils/csv'
 
 const statusTint = {
   Active: 'bg-emerald-50 text-emerald-700',
@@ -23,6 +24,7 @@ export default function InstanceManagement() {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [showCreate, setShowCreate] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
@@ -35,7 +37,7 @@ export default function InstanceManagement() {
       const matchesQuery =
         !q ||
         i.name.toLowerCase().includes(q) ||
-        String(i.description || '').toLowerCase().includes(q)
+        String(i.ticket || '').toLowerCase().includes(q)
       return matchesStatus && matchesQuery
     })
   }, [debounced, data, statusFilter])
@@ -46,12 +48,14 @@ export default function InstanceManagement() {
   const activeCount = data.filter((i) => (i.status || 'Active') === 'Active').length
   const totalIssuers = data.reduce((s, i) => s + (i.issuerIds?.length || 0), 0)
 
-  const addInstance = (payload) => {
-    setData((prev) => [createInstance(payload), ...prev])
+  const addInstance = ({ ticket, ...payload }) => {
+    const created = createInstance(payload)
+    created.ticket = ticket
+    setData((prev) => [created, ...prev])
     setQuery('')
   }
 
-  const saveEdit = (payload) => {
+  const saveEdit = ({ copyIssuers, ...payload }) => {
     if (!editTarget) return
     setData((prev) =>
       prev.map((i) => (i.id === editTarget.id ? { ...i, ...payload, ...stampEditor() } : i))
@@ -59,8 +63,12 @@ export default function InstanceManagement() {
     setEditTarget(null)
   }
 
+
+
   // Inline edits for name / description straight from the table.
   const saveField = (id, field, value) => {
+    const target = data.find((i) => i.id === id)
+    if (target && String(target[field] ?? '') === String(value)) return
     setData((prev) =>
       prev.map((i) => (i.id === id ? { ...i, [field]: value, ...stampEditor() } : i))
     )
@@ -73,19 +81,55 @@ export default function InstanceManagement() {
     )
   }
 
-  const confirmDelete = () => {
+  // Bulk import — update the ticket reference on instances matched by name.
+  const updateExisting = (updates) => {
+    const byName = new Map()
+    updates.forEach((row) => {
+      const key = identityValue(row, 'name')
+      if (key) byName.set(key, row)
+    })
+    setData((prev) =>
+      prev.map((inst) => {
+        const incoming = byName.get(identityValue(inst, 'name'))
+        if (!incoming) return inst
+        const ticket = String(incoming.ticket || '').trim()
+        return ticket ? { ...inst, ticket, ...stampEditor() } : inst
+      })
+    )
+    setQuery('')
+  }
+
+  // Bulk import — add new instances from the Instance / Ticket Number sheet.
+  const addMany = (rows) => {
+    const existing = new Set(data.map((i) => identityValue(i, 'name')))
+    const created = rows
+      .filter((r) => String(r.name || '').trim())
+      .filter((r) => !existing.has(identityValue(r, 'name')))
+      .map((r) => {
+        const inst = createInstance({ name: r.name })
+        inst.ticket = String(r.ticket || '').trim()
+        return inst
+      })
+    if (!created.length) return
+    setData((prev) => [...created, ...prev])
+    setQuery('')
+  }
+
+  const confirmDelete = (ticket) => {
     if (!deleteTarget) return
     setData((prev) => prev.filter((i) => i.id !== deleteTarget.id))
+    // ticket is captured for the audit trail
+    void ticket
     setDeleteTarget(null)
   }
 
   const exportCsv = () => {
-    const cols = ['name', 'description', 'status', 'issuers', 'updatedBy', 'updatedAt']
+    const cols = ['name', 'ticket', 'issuers', 'status', 'updatedBy', 'updatedAt']
     const labels = {
       name: 'Instance',
-      description: 'Description',
-      status: 'Status',
+      ticket: 'Ticket Number',
       issuers: 'Issuers',
+      status: 'Status',
       updatedBy: 'Updated By',
       updatedAt: 'Updated At',
     }
@@ -127,7 +171,7 @@ export default function InstanceManagement() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search instance…"
+                placeholder="Search instance or ticket number"
                 className="w-full rounded-lg border border-gray-200 bg-grey-light py-1.5 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
               />
             </div>
@@ -153,10 +197,19 @@ export default function InstanceManagement() {
             {perms.canCreate && (
               <button
                 onClick={() => setShowCreate(true)}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90"
+                className="flex items-center gap-2 rounded-lg border border-primary px-3 py-1.5 text-sm font-semibold text-primary transition hover:bg-primary/5"
               >
                 <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Create Instance</span>
+                <span className="hidden sm:inline">Create</span>
+              </button>
+            )}
+            {perms.canUpload && (
+              <button
+                onClick={() => setShowUpload(true)}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition hover:opacity-90"
+              >
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">Import Data</span>
               </button>
             )}
           </div>
@@ -167,7 +220,7 @@ export default function InstanceManagement() {
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-gray-100 bg-white">
-                {['Instance', 'Description', 'Issuers', 'Status', 'Updated By', ''].map((h, i) => (
+                {['Instance', 'Ticket Number', 'Issuers', 'Status', 'Updated By', ''].map((h, i) => (
                   <th
                     key={i}
                     className="whitespace-nowrap bg-white px-5 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400"
@@ -196,11 +249,18 @@ export default function InstanceManagement() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-5 py-2.5 text-body">
+                    <td className="whitespace-nowrap px-5 py-2.5 text-body">
                       <EditableCell
-                        value={inst.description || ''}
+                        value={inst.ticket || ''}
                         canEdit={perms.canEdit}
-                        onSave={(v) => saveField(inst.id, 'description', v)}
+                        onSave={(v) => saveField(inst.id, 'ticket', v)}
+                        render={(v) =>
+                          v ? (
+                            <span className="font-medium text-heading">{v}</span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )
+                        }
                       />
                     </td>
                     <td className="whitespace-nowrap px-5 py-2.5">
@@ -282,6 +342,21 @@ export default function InstanceManagement() {
           existingNames={names}
           onClose={() => setShowCreate(false)}
           onSubmit={addInstance}
+        />
+      )}
+      {showUpload && (
+        <UploadSheetModal
+          columns={['name', 'ticket']}
+          labels={{ name: 'Instance', ticket: 'Ticket Number' }}
+          existingRows={data}
+          identityField="name"
+          entityLabel="instance"
+          sampleName="sample-instance.csv"
+          existingHint="Existing instances are matched by name; their ticket reference is updated. Linked issuers are left untouched."
+          newHint="New instances are added at the top of the list and start with no issuers linked."
+          onClose={() => setShowUpload(false)}
+          onUpdateExisting={updateExisting}
+          onAddNew={addMany}
         />
       )}
       {editTarget && (

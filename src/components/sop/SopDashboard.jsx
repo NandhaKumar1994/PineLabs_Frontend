@@ -1,15 +1,19 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import InstanceList from './InstanceList'
 import MerchantList from './MerchantList'
 import MerchantSop from './MerchantSop'
 import { ArrowLeft, Layers } from 'lucide-react'
-import { merchants as initialMerchants, instances } from '../../data/sopData'
+import { merchants as initialMerchants, instances, createInstance } from '../../data/sopData'
+import InstanceFormModal from '../admin/InstanceFormModal'
 
 export default function SopDashboard() {
   const [instance, setInstance] = useState(null)
   const [selected, setSelected] = useState(null)
   const [initialKey, setInitialKey] = useState(null)
   const [issuerData, setIssuerData] = useState(() => [...initialMerchants])
+  // Local instance list so clones appear immediately.
+  const [instanceData, setInstanceData] = useState(() => [...instances])
+  const [cloneTarget, setCloneTarget] = useState(null)
 
   // Issuers belonging to the selected instance.
   const instanceIssuers = useMemo(() => {
@@ -27,7 +31,7 @@ export default function SopDashboard() {
   // An issuer name must be unique within a single instance (the same name may
   // legitimately exist in a different instance).
   const isDuplicateInInstance = (instanceId, name) => {
-    const target = instances.find((inst) => inst.id === instanceId)
+    const target = instanceData.find((inst) => inst.id === instanceId)
     if (!target) return false
     const wanted = String(name || '').trim().toLowerCase()
     if (!wanted) return false
@@ -77,7 +81,7 @@ export default function SopDashboard() {
         <MerchantList
           headerLeft={header}
           merchants={instanceIssuers}
-          instances={instances}
+          instances={instanceData}
           currentInstanceId={instance.id}
           isDuplicateInInstance={isDuplicateInInstance}
           onMerchantsChange={(updater, targetInstanceId) => {
@@ -86,7 +90,7 @@ export default function SopDashboard() {
             // Link the new/updated issuers to the chosen instance (defaults to
             // the one currently open).
             const target =
-              instances.find((inst) => inst.id === targetInstanceId) || instance
+              instanceData.find((inst) => inst.id === targetInstanceId) || instance
             const existing = new Set(target.issuerIds)
             nextList.forEach((m) => existing.add(m.id))
             target.issuerIds = [...existing]
@@ -105,18 +109,42 @@ export default function SopDashboard() {
 
   // Jump directly to an issuer's SOP from the instance landing page.
   const handleJump = (issuer, subsheetKey = null) => {
-    const parent = instances.find((inst) => inst.issuerIds.includes(issuer.id))
+    const parent = instanceData.find((inst) => inst.issuerIds.includes(issuer.id))
     if (parent) setInstance(parent)
     handleSelect(issuer, subsheetKey)
   }
 
+  // Clone an instance, optionally carrying its issuers across.
+  const cloneInstance = ({ name, status, copyIssuers, ticket }) => {
+    if (!cloneTarget) return
+    const copy = createInstance({ name, status })
+    copy.ticket = ticket
+    if (copyIssuers) copy.issuerIds = [...(cloneTarget.issuerIds || [])]
+    setInstanceData((prev) => [copy, ...prev])
+    setCloneTarget(null)
+  }
+
   // Step 1 — instances
   return (
-    <InstanceList
-      instances={instances}
-      issuers={issuerData}
-      onSelect={setInstance}
-      onJump={handleJump}
-    />
+    <>
+      <InstanceList
+        instances={instanceData}
+        issuers={issuerData}
+        onSelect={setInstance}
+        onJump={handleJump}
+        onClone={setCloneTarget}
+      />
+
+      {cloneTarget && (
+        <InstanceFormModal
+          initial={cloneTarget}
+          mode="clone"
+          existingNames={instanceData.map((i) => i.name)}
+          onClose={() => setCloneTarget(null)}
+          onSubmit={cloneInstance}
+        />
+      )}
+    </>
   )
 }
+

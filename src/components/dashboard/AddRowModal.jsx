@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Pencil, X } from 'lucide-react'
+import TicketField, { isValidTicket } from '../common/TicketField'
 
 const inputCls =
   'w-full rounded-lg border border-gray-200 bg-grey-light py-2 px-3 text-sm text-heading outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10'
@@ -23,6 +24,7 @@ export default function AddRowModal({
   groups,
   selectFields = [],
   validateRow,
+  requireTicket = false,
   onClose,
   onSubmit,
   title,
@@ -39,6 +41,7 @@ export default function AddRowModal({
     [columns, initial, selectFields]
   )
   const [form, setForm] = useState(empty)
+  const [ticket, setTicket] = useState('')
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -56,7 +59,8 @@ export default function AddRowModal({
   // Optional caller-supplied check (e.g. duplicate name within an instance).
   // Returns an error message string, or falsy when the row is acceptable.
   const duplicateError = validateRow ? validateRow(form) : null
-  const valid = filled && !duplicateError
+  const ticketOk = !requireTicket || isValidTicket(ticket)
+  const valid = filled && !duplicateError && ticketOk
 
   const submit = (e) => {
     e.preventDefault()
@@ -65,7 +69,7 @@ export default function AddRowModal({
       ...columns.map((col) => [col, String(form[col]).trim()]),
       ...selectFields.map((f) => [f.name, String(form[f.name] ?? '').trim()]),
     ])
-    onSubmit(row)
+    onSubmit(row, requireTicket ? ticket.trim() : undefined)
     onClose()
   }
 
@@ -160,6 +164,12 @@ export default function AddRowModal({
                 </div>
               ))
             : columns.map((col) => renderField(col))}
+
+          {requireTicket && (
+            <div className="border-t border-gray-100 pt-4">
+              <TicketField value={ticket} onChange={setTicket} />
+            </div>
+          )}
 
           {duplicateError && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600">

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Search, Layers, ChevronRight, Building2, Zap, Store, ArrowRight } from 'lucide-react'
+import { Search, Layers, ChevronRight, Building2, Zap, Store, ArrowRight, Copy } from 'lucide-react'
 import { useDebounce } from '../../hooks/useDebounce'
 import Combobox from '../common/Combobox'
+import { useRole } from '../../theme/RoleContext'
 
 const classificationOptions = [
   'Blocking',
@@ -40,7 +41,8 @@ function resolveSubsheetKey(text, issuer) {
 
 // Lists SOP instances. Selecting one loads that instance's issuers.
 // The Jump-to-SOP form lets a user open an issuer's SOP directly.
-export default function InstanceList({ instances, issuers = [], onSelect, onJump }) {
+export default function InstanceList({ instances, issuers = [], onSelect, onJump, onClone }) {
+  const { perms } = useRole()
   const [query, setQuery] = useState('')
   const [issuer, setIssuer] = useState('')
   const [classification, setClassification] = useState('')
@@ -146,23 +148,38 @@ export default function InstanceList({ instances, issuers = [], onSelect, onJump
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((inst) => (
-              <button
+              <div
                 key={inst.id}
-                onClick={() => onSelect(inst)}
-                className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-primary hover:shadow-md"
+                className="group relative flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-primary hover:shadow-md"
               >
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/5 text-primary">
+                {onClone && perms.canCreate && (
+                  <button
+                    type="button"
+                    onClick={() => onClone(inst)}
+                    title={`Clone ${inst.name}`}
+                    className="absolute right-2 top-2 z-10 grid h-7 w-7 place-items-center rounded-md text-gray-300 opacity-0 transition hover:bg-grey-light hover:text-primary focus:opacity-100 group-hover:opacity-100"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onSelect(inst)}
+                  className="absolute inset-0 rounded-xl"
+                  aria-label={`Open ${inst.name}`}
+                />
+                <span className="pointer-events-none grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/5 text-primary">
                   <Layers className="h-6 w-6" />
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className="pointer-events-none min-w-0 flex-1">
                   <p className="truncate font-bold text-heading">{inst.name}</p>
                   <p className="mt-1 flex items-center gap-1 text-xs text-body">
                     <Building2 className="h-3 w-3" />
                     {inst.issuerIds.length} issuers
                   </p>
                 </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-primary" />
-              </button>
+                <ChevronRight className="pointer-events-none h-5 w-5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-primary" />
+              </div>
             ))}
           </div>
         )}
