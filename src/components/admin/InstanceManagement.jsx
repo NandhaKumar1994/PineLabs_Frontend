@@ -11,12 +11,16 @@ import { useRole } from '../../theme/RoleContext'
 import InstanceFormModal from './InstanceFormModal'
 import DeleteInstanceModal from './DeleteInstanceModal'
 import UploadSheetModal from '../dashboard/UploadSheetModal'
+import TicketCaptureModal from '../common/TicketCaptureModal'
+import StatusConfirmModal from '../sop/StatusConfirmModal'
 import { downloadCsv, serializeCsv, identityValue } from '../../utils/csv'
 
 const statusTint = {
   Active: 'bg-emerald-50 text-emerald-700',
   Inactive: 'bg-gray-100 text-gray-500',
 }
+
+const FIELD_LABELS = { name: 'Instance', ticket: 'Ticket Number' }
 
 export default function InstanceManagement() {
   const { perms } = useRole()
@@ -27,6 +31,10 @@ export default function InstanceManagement() {
   const [showUpload, setShowUpload] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  // Inline cell edit awaiting a ticket number.
+  const [pendingCell, setPendingCell] = useState(null)
+  // Instance pending an activate / deactivate confirmation.
+  const [statusTarget, setStatusTarget] = useState(null)
 
   const debounced = useDebounce(query, 200)
 
@@ -65,20 +73,40 @@ export default function InstanceManagement() {
 
 
 
-  // Inline edits for name / description straight from the table.
+  // Inline edits are staged until a ticket number is captured.
   const saveField = (id, field, value) => {
     const target = data.find((i) => i.id === id)
-    if (target && String(target[field] ?? '') === String(value)) return
-    setData((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, [field]: value, ...stampEditor() } : i))
-    )
+    if (!target) return
+    const before = String(target[field] ?? '')
+    if (before === String(value)) return
+    setPendingCell({ id, field, value, before, label: FIELD_LABELS[field] || field })
   }
 
-  const toggleStatus = (inst) => {
-    const next = (inst.status || 'Active') === 'Active' ? 'Inactive' : 'Active'
+  // Commit the staged inline edit once the ticket is supplied.
+  const commitCell = (ticketRef) => {
+    if (!pendingCell) return
+    const { id, field, value } = pendingCell
     setData((prev) =>
-      prev.map((i) => (i.id === inst.id ? { ...i, status: next, ...stampEditor() } : i))
+      prev.map((i) =>
+        i.id === id ? { ...i, [field]: value, ticket: ticketRef, ...stampEditor() } : i
+      )
     )
+    setPendingCell(null)
+  }
+
+  const toggleStatus = (inst) => setStatusTarget(inst)
+
+  const confirmStatus = (ticketRef) => {
+    if (!statusTarget) return
+    const next = (statusTarget.status || 'Active') === 'Active' ? 'Inactive' : 'Active'
+    setData((prev) =>
+      prev.map((i) =>
+        i.id === statusTarget.id
+          ? { ...i, status: next, ticket: ticketRef, ...stampEditor() }
+          : i
+      )
+    )
+    setStatusTarget(null)
   }
 
   // Bulk import — update the ticket reference on instances matched by name.
@@ -166,7 +194,7 @@ export default function InstanceManagement() {
         {/* toolbar */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
           <div className="flex flex-1 flex-wrap items-center gap-2">
-            <div className="relative w-52 sm:w-64">
+            <div className="relative w-64 sm:w-80">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 value={query}
@@ -217,7 +245,16 @@ export default function InstanceManagement() {
 
         {/* table */}
         <div className="nice-scroll min-h-0 flex-1 overflow-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full table-fixed text-left text-sm">
+            {/* Data columns share the width evenly; the actions column is fixed. */}
+            <colgroup>
+              <col className="w-1/5" />
+              <col className="w-1/5" />
+              <col className="w-1/5" />
+              <col className="w-1/5" />
+              <col className="w-1/5" />
+              <col className="w-16" />
+            </colgroup>
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-gray-100 bg-white">
                 {['Instance', 'Ticket Number', 'Issuers', 'Status', 'Updated By', ''].map((h, i) => (
@@ -240,11 +277,13 @@ export default function InstanceManagement() {
                         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/5 text-primary">
                           <Layers className="h-4 w-4" />
                         </span>
-                        <span className="font-semibold text-heading">
+                        <span className="min-w-0 flex-1 font-semibold text-heading">
                           <EditableCell
                             value={inst.name}
                             canEdit={perms.canEdit}
                             onSave={(v) => saveField(inst.id, 'name', v)}
+                            inputWidth="w-full"
+                            truncate={false}
                           />
                         </span>
                       </div>
@@ -254,6 +293,7 @@ export default function InstanceManagement() {
                         value={inst.ticket || ''}
                         canEdit={perms.canEdit}
                         onSave={(v) => saveField(inst.id, 'ticket', v)}
+                        inputWidth="w-full"
                         render={(v) =>
                           v ? (
                             <span className="font-medium text-heading">{v}</span>
@@ -372,6 +412,28 @@ export default function InstanceManagement() {
           instance={deleteTarget}
           onClose={() => setDeleteTarget(null)}
           onConfirm={confirmDelete}
+        />
+      )}
+      {pendingCell && (
+        <TicketCaptureModal
+          title="Save Change"
+          subtitle="Enter the ticket this edit relates to"
+          field={pendingCell.label}
+          before={pendingCell.before}
+          after={pendingCell.value}
+          onClose={() => setPendingCell(null)}
+          onConfirm={commitCell}
+        />
+      )}
+      {statusTarget && (
+        <StatusConfirmModal
+          entityLabel="Instance"
+          name={statusTarget.name}
+          deactivating={(statusTarget.status || 'Active') === 'Active'}
+          activeHint="Its issuers become available in the SOP Dashboard again."
+          inactiveHint="It moves to the Inactive list. Linked issuers are retained but the instance is no longer selectable."
+          onClose={() => setStatusTarget(null)}
+          onConfirm={confirmStatus}
         />
       )}
     </div>

@@ -3,7 +3,15 @@ import { Check, X, Pencil } from 'lucide-react'
 
 // Click a cell to edit it inline. Shows an input with tick (save) and
 // close (cancel) icons. `render` lets callers style the display value.
-export default function EditableCell({ value, onSave, canEdit = true, render }) {
+export default function EditableCell({
+  value,
+  onSave,
+  canEdit = true,
+  render,
+  // Width of the editing input, and whether the display value may wrap.
+  inputWidth = 'w-32',
+  truncate = true,
+}) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value ?? '')
   const inputRef = useRef(null)
@@ -50,7 +58,7 @@ export default function EditableCell({ value, onSave, canEdit = true, render }) 
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          className="w-32 min-w-0 rounded-md border border-primary bg-white px-2 py-1 text-sm text-heading outline-none ring-2 ring-primary/15"
+          className={`${inputWidth} min-w-0 rounded-md border border-primary bg-white px-2 py-1 text-sm text-heading outline-none ring-2 ring-primary/15`}
         />
         <button
           type="button"
@@ -81,7 +89,9 @@ export default function EditableCell({ value, onSave, canEdit = true, render }) 
       title="Click to edit"
       className="group/cell -mx-1 flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left transition hover:bg-primary/[0.06]"
     >
-      <span className="min-w-0 flex-1 truncate">{render ? render(value) : value}</span>
+      <span className={`min-w-0 flex-1 ${truncate ? 'truncate' : ''}`}>
+        {render ? render(value) : value}
+      </span>
       <Pencil className="h-3 w-3 shrink-0 text-gray-300 opacity-0 transition group-hover/cell:opacity-100" />
     </button>
   )
