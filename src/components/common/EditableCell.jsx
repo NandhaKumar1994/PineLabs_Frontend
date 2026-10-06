@@ -15,6 +15,10 @@ export default function EditableCell({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value ?? '')
   const inputRef = useRef(null)
+  // Wraps the whole editing UI (input + save/cancel buttons) so a blur
+  // can tell whether focus merely moved to this cell's own buttons (keep
+  // open) or left the cell entirely (close it).
+  const editWrapRef = useRef(null)
 
   useEffect(() => {
     if (editing) {
@@ -40,6 +44,20 @@ export default function EditableCell({
     setEditing(false)
   }
 
+  // Close this editor when focus leaves it entirely — e.g. the user
+  // clicks another cell to edit — so only ONE cell is ever in edit mode
+  // at a time. We defer to the next tick and check where focus landed:
+  // if it moved to this cell's own Save/Cancel button, we do nothing and
+  // let that button's onClick run; otherwise we cancel (discard the
+  // in-progress draft, same as clicking away from any inline editor).
+  const onBlur = () => {
+    setTimeout(() => {
+      const active = document.activeElement
+      if (editWrapRef.current && editWrapRef.current.contains(active)) return
+      if (editing) cancel()
+    }, 0)
+  }
+
   const onKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -52,12 +70,13 @@ export default function EditableCell({
 
   if (editing) {
     return (
-      <span className="inline-flex items-center gap-1">
+      <span ref={editWrapRef} className="inline-flex items-center gap-1">
         <input
           ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
+          onBlur={onBlur}
           className={`${inputWidth} min-w-0 rounded-md border border-primary bg-white px-2 py-1 text-sm text-heading outline-none ring-2 ring-primary/15`}
         />
         <button

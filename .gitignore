@@ -4,5 +4,8 @@ dist-ssr
 *.local
 .DS_Store
 
+# Local environment config (see .env.example for the template)
+.env
+
 # Word documents
 *.docx

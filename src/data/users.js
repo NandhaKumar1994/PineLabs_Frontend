@@ -26,11 +26,24 @@ export function stampEditor() {
   }
 }
 
-// Formats a stored timestamp for display. Accepts a string or Date.
+// Formats a stored timestamp for display. Accepts a Date, a pre-formatted
+// "YYYY-MM-DD HH:mm" string (the old mock-data shape), or a real ISO-8601
+// datetime string (what the backend sends, e.g.
+// "2026-09-25T15:20:22.670178+05:30" — see PineLabs_Backend's
+// InstanceResponse.updatedAt). ISO strings are parsed into a Date first
+// so they render the same short form instead of the raw timestamp.
 export function formatDateTime(value) {
   if (!value) return '—'
-  if (value instanceof Date) {
-    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`
-  }
-  return String(value)
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+// Splits a stored timestamp into separate date and time strings, for
+// UIs that show them on two lines (e.g. the "UPDATED BY" column).
+export function splitDateTime(value) {
+  const formatted = formatDateTime(value)
+  if (formatted === '—') return { date: '—', time: '' }
+  const [date, time] = formatted.split(' ')
+  return { date, time: time || '' }
 }
