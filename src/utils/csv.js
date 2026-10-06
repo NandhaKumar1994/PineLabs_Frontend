@@ -175,10 +175,35 @@ export async function readSheetFile(file, columns, labels = {}) {
   if (/\.xlsx?$/i.test(name) || /sheet|excel/i.test(file?.type || '')) {
     const buf = await file.arrayBuffer()
     const wb = XLSX.read(buf, { type: 'array', cellDates: false })
-    const sheet = wb.Sheets[wb.SheetNames[0]]
-    if (!sheet) return { rows: [], error: 'The workbook has no sheets.' }
-    const table = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' })
-    return tableToRows(table, columns, labels)
+    if (!wb.SheetNames?.length) return { rows: [], error: 'The workbook has no sheets.' }
+
+    // Combine EVERY sheet (all assumed to share the same columns): the
+    // header comes from the first non-empty sheet, and each further
+    // sheet's rows are appended, skipping repeated header rows. Mirrors
+    // the backend's _parse_xlsx so the preview matches what will import.
+    const isBlank = (r) => !r.some((c) => String(c ?? '').trim())
+    let combined = []
+    let headerKey = null
+    for (const sheetName of wb.SheetNames) {
+      const sheet = wb.Sheets[sheetName]
+      if (!sheet) continue
+      const table = XLSX.utils
+        .sheet_to_json(sheet, { header: 1, raw: false, defval: '' })
+        .filter((r) => Array.isArray(r) && !isBlank(r))
+      if (!table.length) continue
+
+      const key = table[0].map((c) => String(c ?? '').trim().toLowerCase()).join('\u0001')
+      if (headerKey === null) {
+        // First sheet with content: keep its header + all its rows.
+        headerKey = key
+        combined = combined.concat(table)
+      } else {
+        // Later sheet: drop its leading row only if it repeats the header.
+        combined = combined.concat(key === headerKey ? table.slice(1) : table)
+      }
+    }
+    if (!combined.length) return { rows: [], error: 'The workbook has no data.' }
+    return tableToRows(combined, columns, labels)
   }
   const text = await file.text()
   return sheetToRows(text, columns, labels)

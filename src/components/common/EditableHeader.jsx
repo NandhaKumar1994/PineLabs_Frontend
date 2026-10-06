@@ -8,6 +8,9 @@ export default function EditableHeader({ value, onSave, canEdit = true, validate
   const [draft, setDraft] = useState(value ?? '')
   const [error, setError] = useState('')
   const inputRef = useRef(null)
+  // Wraps the input + save/cancel buttons so a blur can tell whether
+  // focus moved to this header's own buttons (keep open) or left entirely.
+  const editWrapRef = useRef(null)
 
   useEffect(() => {
     if (!editing) return
@@ -44,6 +47,18 @@ export default function EditableHeader({ value, onSave, canEdit = true, validate
     setEditing(false)
   }
 
+  // Close this header editor when focus leaves it entirely (e.g. the user
+  // clicks another header/cell to edit) so only one editor is ever open.
+  // If focus moved to this header's own Save/Cancel button, let that
+  // button's click run instead.
+  const onBlur = () => {
+    setTimeout(() => {
+      const active = document.activeElement
+      if (editWrapRef.current && editWrapRef.current.contains(active)) return
+      if (editing) cancel()
+    }, 0)
+  }
+
   const onKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -56,12 +71,13 @@ export default function EditableHeader({ value, onSave, canEdit = true, validate
 
   if (editing) {
     return (
-      <span className="relative inline-flex items-center gap-1">
+      <span ref={editWrapRef} className="relative inline-flex items-center gap-1">
         <input
           ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
+          onBlur={onBlur}
           className="w-32 min-w-0 rounded-md border border-primary bg-white px-2 py-1 text-xs font-semibold normal-case tracking-normal text-heading outline-none ring-2 ring-primary/15"
         />
         <button
