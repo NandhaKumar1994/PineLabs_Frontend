@@ -10,7 +10,6 @@ import {
   Loader2,
   Clock,
   ChevronDown,
-  ChevronRight,
   RefreshCw,
 } from 'lucide-react'
 
@@ -106,7 +105,7 @@ function stageLabel(progress) {
   if (s === 'queued') return 'Queued — waiting to start'
   if (s === 'completed') return 'All files imported successfully'
   if (s === 'failed') return 'Finished — no records imported'
-  if (s === 'completed_with_errors') return 'Finished with some skipped sheets'
+  if (s === 'completed_with_errors') return 'Finished with some skipped files'
   // processing
   if ((progress.totalRows || 0) === 0) return 'Reading & validating files…'
   return `Validating & importing rows (${progress.processedRows}/${progress.totalRows})`
@@ -186,7 +185,6 @@ export default function InstanceImportModal({
   const [statusOpen, setStatusOpen] = useState(true)
   const [errors, setErrors] = useState([])
   const [errorsLoading, setErrorsLoading] = useState(false)
-  const [expanded, setExpanded] = useState({})
 
   const inputRef = useRef(null)
   const pollRef = useRef(null)
@@ -296,8 +294,6 @@ export default function InstanceImportModal({
         progress: 0,
         totalFiles: res.totalFiles || validFiles.length,
         processedFiles: 0,
-        totalSheets: 0,
-        processedSheets: 0,
         totalRows: 0,
         processedRows: 0,
         createdRows: 0,
@@ -322,9 +318,9 @@ export default function InstanceImportModal({
       const s = String(v ?? '')
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
     }
-    const header = ['File', 'Sheet', 'Row', 'Error'].join(',')
+    const header = ['File', 'Row', 'Error'].join(',')
     const lines = errors.flatMap((e) =>
-      (e.messages || []).map((m) => [esc(e.file), esc(e.sheet ?? ''), esc(e.row ?? ''), esc(m)].join(','))
+      (e.messages || []).map((m) => [esc(e.file), esc(e.row ?? ''), esc(m)].join(','))
     )
     const csv = [header, ...lines].join('\r\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -357,24 +353,15 @@ export default function InstanceImportModal({
     )
   }, [progress, isTerminal])
 
-  // Overall roll-ups shown in the counter tiles. The backend's
-  // processedRows/processedSheets count what was READ, but imports are
-  // atomic per sheet — a failed sheet lands NOTHING. So the "Rows" and
-  // "Sheets" tiles report what actually IMPORTED, derived from the
-  // per-sheet statuses, so a run with one failed 500-row sheet reads
-  // "4500/5000 rows" and "29/30 sheets" instead of the misleading
-  // "5000/5000" / "30/30".
+  // Overall roll-up shown in the "Rows" tile. The backend's processedRows
+  // counts what was READ, but imports are atomic per file — a failed file
+  // lands NOTHING. So "Rows" reports what actually IMPORTED, summed from
+  // the per-file imported counts, so a run with one failed 500-row file
+  // reads "4500/5000 rows" instead of the misleading "5000/5000".
   const rollup = useMemo(() => {
     const files = progress?.files || []
-    const sheets = files.flatMap((f) => f.sheets || [])
-    const hasSheetTree = sheets.length > 0
-    const importedRowTotal = hasSheetTree
-      ? sheets.reduce((n, s) => n + importedRows(s), 0)
-      : files.reduce((n, f) => n + importedRows(f), 0)
-    const importedSheetTotal = hasSheetTree
-      ? sheets.filter((s) => s.status === 'completed').length
-      : null
-    return { importedRowTotal, importedSheetTotal, hasSheetTree }
+    const importedRowTotal = files.reduce((n, f) => n + importedRows(f), 0)
+    return { importedRowTotal }
   }, [progress])
 
   return (
@@ -392,8 +379,8 @@ export default function InstanceImportModal({
               <h2 className="text-sm font-bold text-heading">Import Instances</h2>
               <p className="text-xs text-body">
                 {phase === 'select'
-                  ? 'Upload one or more .csv / .xlsx files — each sheet is imported independently'
-                  : 'Existing instances update by name; new names are added. Clean sheets import even if others fail.'}
+                  ? 'Upload one or more .csv / .xlsx files — for Excel, only the first sheet is imported'
+                  : 'Existing instances update by name; new names are added. Clean files import even if others fail.'}
               </p>
             </div>
           </div>
@@ -413,7 +400,7 @@ export default function InstanceImportModal({
           <>
             <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-grey-light/50 px-5 py-2.5">
               <p className="min-w-0 truncate text-xs text-body">
-                Each file may contain multiple sheets; every sheet is validated on its own.
+                For Excel files, only the first sheet is imported — any other sheets are ignored.
               </p>
               {onDownloadTemplate && (
                 <button
@@ -593,13 +580,8 @@ export default function InstanceImportModal({
                       {[
                         { label: 'Files', value: `${progress.processedFiles}/${progress.totalFiles}`, cls: 'text-heading' },
                         {
-                          label: 'Sheets',
-                          value: `${rollup.importedSheetTotal ?? progress.processedSheets}/${progress.totalSheets}`,
-                          cls: 'text-heading',
-                        },
-                        {
                           label: 'Rows',
-                          value: `${rollup.hasSheetTree ? rollup.importedRowTotal : progress.processedRows}/${progress.totalRows}`,
+                          value: `${rollup.importedRowTotal}/${progress.totalRows}`,
                           cls: 'text-heading',
                         },
                         { label: 'Created', value: progress.createdRows, cls: 'text-emerald-600' },
@@ -662,10 +644,7 @@ export default function InstanceImportModal({
                   </div>
                   <div className="px-4 pb-3">
                     <div className="mb-1.5 flex items-center justify-between text-[11px] text-body">
-                      <span>
-                        Sheet {currentFile.processedSheets}
-                        {currentFile.totalSheets ? ` / ${currentFile.totalSheets}` : ''}
-                      </span>
+                      <span>Importing rows…</span>
                       <span className="font-bold text-primary">{currentFile.progress || 0}%</span>
                     </div>
                     <ProgressBar value={currentFile.progress} tone="primary" />
@@ -682,12 +661,11 @@ export default function InstanceImportModal({
                 </div>
               )}
 
-              {/* ---- Per-file / per-sheet breakdown ---- */}
+              {/* ---- Per-file breakdown (one row per uploaded file) ---- */}
               {(progress.files || []).length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Files</p>
                   {(progress.files || []).map((f) => {
-                    const open = expanded[f.id]
                     const tone =
                       f.status === 'failed'
                         ? 'error'
@@ -698,20 +676,7 @@ export default function InstanceImportModal({
                             : 'primary'
                     return (
                       <div key={f.id} className="rounded-xl border border-gray-200">
-                        <button
-                          type="button"
-                          onClick={() => setExpanded((e) => ({ ...e, [f.id]: !e[f.id] }))}
-                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left"
-                        >
-                          {(f.sheets || []).length > 0 ? (
-                            open ? (
-                              <ChevronDown className="h-4 w-4 shrink-0 text-body" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 shrink-0 text-body" />
-                            )
-                          ) : (
-                            <span className="w-4 shrink-0" />
-                          )}
+                        <div className="flex w-full items-center gap-3 px-4 py-2.5 text-left">
                           <FileSpreadsheet className="h-4 w-4 shrink-0 text-primary" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
@@ -723,10 +688,7 @@ export default function InstanceImportModal({
                                 <ProgressBar value={f.progress} tone={tone} />
                               </div>
                               <span className="shrink-0 text-[11px] text-body">
-                                {(f.sheets || []).length
-                                  ? (f.sheets || []).reduce((n, s) => n + importedRows(s), 0)
-                                  : importedRows(f)}
-                                /{f.totalRows} rows
+                                {importedRows(f)}/{f.totalRows} rows
                               </span>
                               {f.elapsedMs != null && (
                                 <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-body">
@@ -737,32 +699,11 @@ export default function InstanceImportModal({
                             </div>
                             {f.errorCount > 0 && (
                               <p className="mt-1 text-[11px] font-medium text-amber-600">
-                                {f.errorCount} issue{f.errorCount === 1 ? '' : 's'} · sheets with errors were skipped
+                                {f.errorCount} issue{f.errorCount === 1 ? '' : 's'} — this file was skipped
                               </p>
                             )}
                           </div>
-                        </button>
-
-                        {open && (f.sheets || []).length > 0 && (
-                          <ul className="border-t border-gray-100 px-4 py-2">
-                            {f.sheets.map((s) => (
-                              <li key={s.id} className="flex items-center gap-2 py-1">
-                                <span className="min-w-0 flex-1 truncate text-xs text-body">
-                                  {s.sheetName || '(single sheet)'}
-                                </span>
-                                <span className="shrink-0 text-[11px] text-body">
-                                  {importedRows(s)}/{s.totalRows}
-                                </span>
-                                {s.errorCount > 0 && (
-                                  <span className="shrink-0 text-[11px] font-medium text-red-600">
-                                    {s.errorCount} err
-                                  </span>
-                                )}
-                                <StatusChip status={s.status} />
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                        </div>
                       </div>
                     )
                   })}
@@ -799,7 +740,6 @@ export default function InstanceImportModal({
                       <li key={i} className="px-4 py-2 text-xs leading-snug">
                         <span className="font-semibold text-heading">
                           {e.file}
-                          {e.sheet ? <span className="text-body"> › {e.sheet}</span> : ''}
                           {e.row != null ? <span className="text-body"> › row {e.row}</span> : ''}
                         </span>
                         <ul className="ml-3 mt-0.5 list-disc text-red-600">

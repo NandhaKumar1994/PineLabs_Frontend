@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
-import { X, Power, PowerOff } from 'lucide-react'
+import { X, Power, PowerOff, User, UserCheck } from 'lucide-react'
 import TicketField, { isValidTicket } from '../common/TicketField'
 
+const auditInputCls =
+  'w-full rounded-lg border border-gray-200 bg-grey-light py-2 pl-9 pr-3 text-sm text-heading outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10'
+
 // Confirms activating / deactivating a record (issuer, BIN record, etc.).
+//
+// `requireReviewers` (opt-in) adds two MANDATORY fields — Revised By /
+// Reviewer — above the ticket and passes them to onConfirm as a second
+// argument: onConfirm(ticket, { revisedBy, reviewer }). Callers that
+// don't set it (SOP / BIN) keep the ticket-only flow and the original
+// onConfirm(ticket) signature unchanged.
 export default function StatusConfirmModal({
   issuer,
   name,
@@ -10,10 +19,13 @@ export default function StatusConfirmModal({
   deactivating,
   activeHint,
   inactiveHint,
+  requireReviewers = false,
   onClose,
   onConfirm,
 }) {
   const [ticket, setTicket] = useState('')
+  const [revisedBy, setRevisedBy] = useState('')
+  const [reviewer, setReviewer] = useState('')
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -23,6 +35,18 @@ export default function StatusConfirmModal({
 
   const Icon = deactivating ? PowerOff : Power
   const label = name ?? issuer?.name ?? ''
+
+  const reviewersValid = !requireReviewers || (revisedBy.trim() && reviewer.trim())
+  const valid = isValidTicket(ticket) && reviewersValid
+
+  const handleConfirm = () => {
+    if (!valid) return
+    if (requireReviewers) {
+      onConfirm(ticket.trim(), { revisedBy: revisedBy.trim(), reviewer: reviewer.trim() })
+    } else {
+      onConfirm(ticket.trim())
+    }
+  }
 
   const hint = deactivating
     ? inactiveHint ||
@@ -65,8 +89,43 @@ export default function StatusConfirmModal({
           </p>
           <p className="mt-1.5 text-xs">{hint}</p>
 
+          {requireReviewers && (
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-heading">
+                  Revised By <span className="text-red-500">*</span>
+                </span>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    autoFocus
+                    value={revisedBy}
+                    onChange={(e) => setRevisedBy(e.target.value)}
+                    placeholder="Name"
+                    className={auditInputCls}
+                  />
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-heading">
+                  Reviewer <span className="text-red-500">*</span>
+                </span>
+                <div className="relative">
+                  <UserCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={reviewer}
+                    onChange={(e) => setReviewer(e.target.value)}
+                    placeholder="Name"
+                    className={auditInputCls}
+                  />
+                </div>
+              </label>
+            </div>
+          )}
+
           <div className="mt-3">
-            <TicketField autoFocus value={ticket} onChange={setTicket} />
+            <TicketField autoFocus={!requireReviewers} value={ticket} onChange={setTicket} />
           </div>
         </div>
 
@@ -80,8 +139,8 @@ export default function StatusConfirmModal({
           </button>
           <button
             type="button"
-            disabled={!isValidTicket(ticket)}
-            onClick={() => onConfirm(ticket.trim())}
+            disabled={!valid}
+            onClick={handleConfirm}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 ${
               deactivating ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
             }`}

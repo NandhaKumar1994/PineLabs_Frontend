@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { X, Ticket, Check, ArrowRight, Lock } from 'lucide-react'
+import { X, Ticket, Check, ArrowRight, Lock, User, UserCheck } from 'lucide-react'
 import TicketField, { isValidTicket } from './TicketField'
 import BrandLoader from './BrandLoader'
+
+const auditInputCls =
+  'w-full rounded-lg border border-gray-200 bg-grey-light py-2 pl-9 pr-3 text-sm text-heading outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10'
 
 // Asks for a ticket number before committing a change. Optionally shows the
 // pending before/after value so the user can confirm what they are saving.
@@ -17,6 +20,12 @@ import BrandLoader from './BrandLoader'
 //   - contextField { label, value }: an extra read-only box shown above
 //     the ticket, auto-populated. Used when editing the Ticket Number
 //     itself, to show which Instance (read-only) the ticket belongs to.
+//
+// Instance Management also opts into two MANDATORY audit fields via
+// `requireReviewers`: Revised By / Reviewer are shown above the ticket,
+// gate the save, and are returned to onConfirm as a second argument
+// ({ revisedBy, reviewer }). Other callers omit the prop and keep the
+// original ticket-only flow and onConfirm(ticket) signature.
 export default function TicketCaptureModal({
   title = 'Confirm Change',
   subtitle = 'Enter the ticket this change relates to',
@@ -26,11 +35,22 @@ export default function TicketCaptureModal({
   readOnlyTicket,
   readOnlyTicketHint = 'Change is linked to this instance’s existing ticket.',
   contextField,
+  // When true, two extra MANDATORY fields (Revised By / Reviewer) are
+  // shown above the ticket and gate the save, and the confirmed values
+  // are passed to onConfirm as a second argument:
+  //   onConfirm(ticket, { revisedBy, reviewer })
+  // Callers that don't set this (e.g. column add/rename) keep the
+  // original ticket-only flow and onConfirm(ticket) signature unchanged.
+  requireReviewers = false,
+  initialRevisedBy = '',
+  initialReviewer = '',
   onClose,
   onConfirm,
 }) {
   const ticketLocked = readOnlyTicket !== undefined && readOnlyTicket !== null
   const [ticket, setTicket] = useState(ticketLocked ? String(readOnlyTicket) : '')
+  const [revisedBy, setRevisedBy] = useState(initialRevisedBy)
+  const [reviewer, setReviewer] = useState(initialReviewer)
   // In-flight state for the branded loader while the change is saved.
   // We await onConfirm so callers whose handler is async (e.g. the row
   // "Save Change" update) show the loader for the whole request.
@@ -53,7 +73,9 @@ export default function TicketCaptureModal({
   // When the ticket is locked/auto-populated, it's always valid to
   // confirm (there's a real existing ticket); otherwise it must be a
   // non-blank ticket the user typed.
-  const valid = ticketLocked ? String(readOnlyTicket).trim().length > 0 : isValidTicket(ticket)
+  const ticketValid = ticketLocked ? String(readOnlyTicket).trim().length > 0 : isValidTicket(ticket)
+  const reviewersValid = !requireReviewers || (revisedBy.trim().length > 0 && reviewer.trim().length > 0)
+  const valid = ticketValid && reviewersValid
 
   const submit = async (e) => {
     e.preventDefault()
@@ -66,7 +88,12 @@ export default function TicketCaptureModal({
       // parent usually unmounts this modal. If onConfirm THROWS, the save
       // failed (e.g. a datatype validation error) — we show that message
       // inline here and keep the modal open so the user can fix/retry.
-      await onConfirm(ticketLocked ? String(readOnlyTicket).trim() : ticket.trim())
+      const ticketValue = ticketLocked ? String(readOnlyTicket).trim() : ticket.trim()
+      if (requireReviewers) {
+        await onConfirm(ticketValue, { revisedBy: revisedBy.trim(), reviewer: reviewer.trim() })
+      } else {
+        await onConfirm(ticketValue)
+      }
       setSubmitting(false)
     } catch (err) {
       setError(err?.message || 'Could not save the change.')
@@ -127,6 +154,44 @@ export default function TicketCaptureModal({
             </div>
           )}
 
+          {/* Mandatory audit trail (Revised By / Reviewer) — shown only
+              when the caller opts in via requireReviewers. Both gate the
+              Save button and are passed back through onConfirm. */}
+          {requireReviewers && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-heading">
+                  Revised By <span className="text-red-500">*</span>
+                </span>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    autoFocus
+                    value={revisedBy}
+                    onChange={(e) => setRevisedBy(e.target.value)}
+                    placeholder="Name"
+                    className={auditInputCls}
+                  />
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-heading">
+                  Reviewer <span className="text-red-500">*</span>
+                </span>
+                <div className="relative">
+                  <UserCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={reviewer}
+                    onChange={(e) => setReviewer(e.target.value)}
+                    placeholder="Name"
+                    className={auditInputCls}
+                  />
+                </div>
+              </label>
+            </div>
+          )}
+
           {/* Read-only context (e.g. the Instance name) shown when editing
               the ticket number itself, auto-populated and non-editable. */}
           {contextField && (
@@ -159,7 +224,9 @@ export default function TicketCaptureModal({
               <span className="mt-1 block text-[11px] text-body">{readOnlyTicketHint}</span>
             </label>
           ) : (
-            <TicketField autoFocus value={ticket} onChange={setTicket} />
+            // Only grab focus here when there are no reviewer fields above;
+            // otherwise focus starts on Revised By (the first field).
+            <TicketField autoFocus={!requireReviewers} value={ticket} onChange={setTicket} />
           )}
 
           {error && (

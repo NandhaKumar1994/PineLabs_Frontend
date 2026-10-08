@@ -32,8 +32,11 @@ export const instanceColumnService = {
 
   /**
    * Create a custom column.
-   * payload: { label, type, required, defaultValue?, options?: string[] }
-   * Backfills existing instances with the default (or NA).
+   * payload: { label, type, required, defaultValue?, options?: string[],
+   *            ticketNumber, revisedBy, reviewer }
+   * ticketNumber/revisedBy/reviewer are the mandatory audit trail
+   * (persisted on the column row). Backfills existing instances with the
+   * default (or NA).
    */
   create(payload) {
     return httpService.post(endpoints.instances.columns, payload)
@@ -47,9 +50,15 @@ export const instanceColumnService = {
     return httpService.patch(endpoints.instances.columnById(id), payload)
   },
 
-  /** Delete a custom column (strips its values from every instance). */
-  remove(id) {
-    return httpService.delete(endpoints.instances.columnById(id))
+  /**
+   * Delete a custom column (strips its values from every instance) and
+   * record the deletion audit.
+   * audit: { ticketNumber, revisedBy, reviewer } — all mandatory
+   * (enforced by the Delete Column dialog and the backend schema). Sent
+   * as the DELETE request body.
+   */
+  remove(id, audit) {
+    return httpService.delete(endpoints.instances.columnById(id), { data: audit })
   },
 
   /**

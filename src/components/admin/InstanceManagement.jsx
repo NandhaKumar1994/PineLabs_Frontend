@@ -202,18 +202,25 @@ export default function InstanceManagement() {
 
   // Returns the ok boolean so the modal can await it, show its branded
   // loader while the request is in flight, and only close on success.
-  const addInstance = async ({ ticket, name, status, customFields }) => {
+  const addInstance = async ({ ticket, name, status, revisedBy, reviewer, customFields }) => {
     const ok = await runAction(() =>
-      instanceService.create({ name, status, ticketNumber: ticket, customFields })
+      instanceService.create({ name, status, ticketNumber: ticket, revisedBy, reviewer, customFields })
     )
     if (ok) setShowCreate(false)
     return ok
   }
 
-  const saveEdit = async ({ name, status, ticket, customFields }) => {
+  const saveEdit = async ({ name, status, ticket, revisedBy, reviewer, customFields }) => {
     if (!editTarget) return false
     const ok = await runAction(() =>
-      instanceService.update(editTarget.id, { name, status, ticketNumber: ticket, customFields })
+      instanceService.update(editTarget.id, {
+        name,
+        status,
+        ticketNumber: ticket,
+        revisedBy,
+        reviewer,
+        customFields,
+      })
     )
     if (ok) setEditTarget(null)
     return ok
@@ -235,6 +242,8 @@ export default function InstanceManagement() {
       label: FIELD_LABELS[field] || field,
       instanceName: target.name,
       existingTicket: target.ticketNumber || '',
+      revisedBy: target.revisedBy || '',
+      reviewer: target.reviewer || '',
     })
   }
 
@@ -251,6 +260,8 @@ export default function InstanceManagement() {
       label: col.label,
       instanceName: inst.name,
       existingTicket: inst.ticketNumber || '',
+      revisedBy: inst.revisedBy || '',
+      reviewer: inst.reviewer || '',
     })
   }
 
@@ -262,12 +273,14 @@ export default function InstanceManagement() {
   // number") and stays open — rather than closing and dropping the error
   // into the page-level banner behind it. On success we refresh and close
   // the modal.
-  const commitCell = async (ticketRef) => {
+  const commitCell = async (ticketRef, reviewers = {}) => {
     if (!pendingCell) return
     const { id, field, customKey, value } = pendingCell
+    const { revisedBy, reviewer } = reviewers
+    const audit = { ticketNumber: ticketRef, revisedBy, reviewer }
     const body = customKey
-      ? { customFields: { [customKey]: value }, ticketNumber: ticketRef }
-      : { [field]: value, ticketNumber: ticketRef }
+      ? { customFields: { [customKey]: value }, ...audit }
+      : { [field]: value, ...audit }
     setActionError('')
     await instanceService.update(id, body) // throws on failure -> caught by the modal
     refreshAfterWrite()
@@ -276,10 +289,17 @@ export default function InstanceManagement() {
 
   const toggleStatus = (inst) => setStatusTarget(inst)
 
-  const confirmStatus = async (ticketRef) => {
+  const confirmStatus = async (ticketRef, reviewers = {}) => {
     if (!statusTarget) return
     const next = (statusTarget.status || 'Active') === 'Active' ? 'Inactive' : 'Active'
-    const ok = await runAction(() => instanceService.update(statusTarget.id, { status: next, ticketNumber: ticketRef }))
+    const ok = await runAction(() =>
+      instanceService.update(statusTarget.id, {
+        status: next,
+        ticketNumber: ticketRef,
+        revisedBy: reviewers.revisedBy,
+        reviewer: reviewers.reviewer,
+      })
+    )
     if (ok) setStatusTarget(null)
   }
 
@@ -297,10 +317,17 @@ export default function InstanceManagement() {
   const pollImportJob = (jobId) => instanceService.getImportJob(jobId)
   const fetchImportErrors = (jobId) => instanceService.getImportJobErrors(jobId)
 
-  const confirmDelete = async (ticket) => {
+  const confirmDelete = async (ticket, reviewers = {}) => {
     if (!deleteTarget) return
-    void ticket // captured for the audit trail server-side (revisions), no dedicated field on DELETE today
-    const ok = await runAction(() => instanceService.remove(deleteTarget.id))
+    // ticket + revised by + reviewer persist server-side in the
+    // instance_deletions audit table.
+    const ok = await runAction(() =>
+      instanceService.remove(deleteTarget.id, {
+        ticketNumber: ticket,
+        revisedBy: reviewers.revisedBy,
+        reviewer: reviewers.reviewer,
+      })
+    )
     if (ok) setDeleteTarget(null)
   }
 
@@ -344,13 +371,18 @@ export default function InstanceManagement() {
     setShowAddColumn(false)
   }
 
-  const performColumnAdd = async (ticketRef) => {
+  const performColumnAdd = async (ticketRef, reviewers = {}) => {
     if (!pendingColumnAdd) return
-    void ticketRef // captured in the UI only for now (option B); not persisted yet
     setActionError('')
     // Throw on failure so the ticket modal shows the error inline and
-    // stays open; refresh + close only on success.
-    await instanceColumnService.create(pendingColumnAdd)
+    // stays open; refresh + close only on success. The audit trail
+    // (ticket + revised by + reviewer) is persisted on the column row.
+    await instanceColumnService.create({
+      ...pendingColumnAdd,
+      ticketNumber: ticketRef,
+      revisedBy: reviewers.revisedBy,
+      reviewer: reviewers.reviewer,
+    })
     await fetchColumns()
     await fetchList()
     setPendingColumnAdd(null)
@@ -362,14 +394,17 @@ export default function InstanceManagement() {
     setPendingColumnRename({ columnId, label: nextLabel, before: col?.label || '' })
   }
 
-  const performColumnRename = async (ticketRef) => {
+  const performColumnRename = async (ticketRef, reviewers = {}) => {
     if (!pendingColumnRename) return
-    void ticketRef // captured in the UI only for now (option B); not persisted yet
     setActionError('')
     // Throw on failure so the ticket modal shows the error inline and
-    // stays open; refresh + close only on success.
+    // stays open; refresh + close only on success. The audit trail is
+    // persisted on the column row alongside the new label.
     await instanceColumnService.update(pendingColumnRename.columnId, {
       label: pendingColumnRename.label,
+      ticketNumber: ticketRef,
+      revisedBy: reviewers.revisedBy,
+      reviewer: reviewers.reviewer,
     })
     await fetchColumns()
     setPendingColumnRename(null)
@@ -388,13 +423,18 @@ export default function InstanceManagement() {
   // confirmDeleteColumn once the user confirms.
   const deleteColumn = (column) => setDeleteColumnTarget(column)
 
-  const confirmDeleteColumn = async (ticketRef) => {
+  const confirmDeleteColumn = async (ticketRef, reviewers = {}) => {
     if (!deleteColumnTarget) return
-    void ticketRef // captured in the UI only for now (option B); not persisted yet
     setActionError('')
     // Throw on failure so the delete modal shows the error inline and
-    // stays open; refresh + close only on success.
-    await instanceColumnService.remove(deleteColumnTarget.id)
+    // stays open; refresh + close only on success. The audit trail
+    // (ticket + revised by + reviewer) is persisted server-side in the
+    // instance_column_deletions table.
+    await instanceColumnService.remove(deleteColumnTarget.id, {
+      ticketNumber: ticketRef,
+      revisedBy: reviewers.revisedBy,
+      reviewer: reviewers.reviewer,
+    })
     await fetchColumns()
     await fetchList()
     setDeleteColumnTarget(null)
@@ -646,10 +686,12 @@ export default function InstanceManagement() {
   }
 
   // Import/export expected columns = the fixed ones + each custom label.
-  const importColumnKeys = ['name', 'ticket', ...columns.map((c) => c.key)]
+  const importColumnKeys = ['name', 'ticket', 'revisedBy', 'reviewer', ...columns.map((c) => c.key)]
   const importColumnLabels = {
     name: 'Instance',
     ticket: 'Ticket Number',
+    revisedBy: 'Revised By',
+    reviewer: 'Reviewer',
     ...Object.fromEntries(columns.map((c) => [c.key, c.label])),
   }
 
@@ -860,6 +902,13 @@ export default function InstanceManagement() {
                             <RowActionsMenu
                               onEdit={perms.canEdit ? () => setEditTarget(inst) : undefined}
                               onDelete={perms.canDelete ? () => setDeleteTarget(inst) : undefined}
+                              // An instance can only be deleted when it has
+                              // NO issuers grouped under it. If it still has
+                              // issuers, Delete is shown disabled and only
+                              // Activate/Deactivate (the Power button) is
+                              // usable.
+                              deleteDisabled={(inst.issuerCount || 0) > 0}
+                              deleteDisabledReason="This instance still has issuers. Reassign or remove them before deleting; you can deactivate it instead."
                             />
                           )}
                         </div>
@@ -929,6 +978,7 @@ export default function InstanceManagement() {
           subtitle="Enter the ticket this change relates to"
           field="New column"
           after={pendingColumnAdd.label}
+          requireReviewers
           onClose={() => {
             setPendingColumnAdd(null)
             setShowAddColumn(true)
@@ -944,6 +994,7 @@ export default function InstanceManagement() {
           field="Column name"
           before={pendingColumnRename.before}
           after={pendingColumnRename.label}
+          requireReviewers
           onClose={() => setPendingColumnRename(null)}
           onConfirm={performColumnRename}
         />
@@ -985,6 +1036,7 @@ export default function InstanceManagement() {
           field={pendingCell.label}
           before={pendingCell.before}
           after={pendingCell.value}
+          requireReviewers
           onClose={() => setPendingCell(null)}
           onConfirm={commitCell}
         />
@@ -996,6 +1048,7 @@ export default function InstanceManagement() {
           deactivating={(statusTarget.status || 'Active') === 'Active'}
           activeHint="Its issuers become available in the SOP Dashboard again."
           inactiveHint="It moves to the Inactive list. Linked issuers are retained but the instance is no longer selectable."
+          requireReviewers
           onClose={() => setStatusTarget(null)}
           onConfirm={confirmStatus}
         />

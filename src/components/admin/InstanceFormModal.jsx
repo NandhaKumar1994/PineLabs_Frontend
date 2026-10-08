@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, Layers, Plus, Pencil, Copy, Check } from 'lucide-react'
+import { X, Layers, Plus, Pencil, Copy, Check, User, UserCheck } from 'lucide-react'
 import TicketField, { isValidTicket } from '../common/TicketField'
 import Select from '../common/Select'
 import BrandLoader from '../common/BrandLoader'
@@ -31,6 +31,13 @@ export default function InstanceFormModal({
   // blank when the modal opens — same as `name`/`status` above. On
   // create/clone there is nothing to pre-fill from.
   const [ticket, setTicket] = useState(isEdit ? initial?.ticket ?? '' : '')
+  // Audit trail — mandatory on every create AND edit. Deliberately starts
+  // BLANK (not pre-filled from the instance's last values), the same as
+  // the Ticket Number conceptually: each change must capture who revised
+  // and reviewed THIS change, so a stale carried-over name can't be saved
+  // by accident. Applies to create, clone, and edit alike.
+  const [revisedBy, setRevisedBy] = useState('')
+  const [reviewer, setReviewer] = useState('')
 
   // Custom field values keyed by column key. Pre-filled from the
   // instance's existing customFields on edit; blank on create (the
@@ -68,7 +75,14 @@ export default function InstanceFormModal({
   const missingRequired = columns.some(
     (c) => c.required && !String(customValues[c.key] ?? '').trim()
   )
-  const valid = trimmed && !duplicate && isValidTicket(ticket) && !missingRequired && !submitting
+  const valid =
+    trimmed &&
+    !duplicate &&
+    isValidTicket(ticket) &&
+    revisedBy.trim() &&
+    reviewer.trim() &&
+    !missingRequired &&
+    !submitting
 
   const submit = async (e) => {
     e.preventDefault()
@@ -91,6 +105,8 @@ export default function InstanceFormModal({
         status,
         copyIssuers,
         ticket: ticket.trim(),
+        revisedBy: revisedBy.trim(),
+        reviewer: reviewer.trim(),
         customFields,
       })
       if (ok === false) setSubmitting(false)
@@ -234,6 +250,40 @@ export default function InstanceFormModal({
               </span>
             </button>
           )}
+
+          {/* Audit trail — Revised By / Reviewer are mandatory (gated by
+              `valid` above), same as the Ticket Number below. */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-heading">
+                Revised By <span className="text-red-500">*</span>
+              </span>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={revisedBy}
+                  onChange={(e) => setRevisedBy(e.target.value)}
+                  placeholder="Name"
+                  className={`${inputCls} pl-9`}
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-heading">
+                Reviewer <span className="text-red-500">*</span>
+              </span>
+              <div className="relative">
+                <UserCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={reviewer}
+                  onChange={(e) => setReviewer(e.target.value)}
+                  placeholder="Name"
+                  className={`${inputCls} pl-9`}
+                />
+              </div>
+            </label>
+          </div>
 
           <TicketField value={ticket} onChange={setTicket} />
         </div>

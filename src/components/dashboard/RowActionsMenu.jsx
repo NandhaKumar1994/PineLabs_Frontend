@@ -2,7 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MoreHorizontal, Pencil, Copy, Trash2 } from 'lucide-react'
 
-export default function RowActionsMenu({ onEdit, onClone, onDelete }) {
+export default function RowActionsMenu({
+  onEdit,
+  onClone,
+  onDelete,
+  // When true, the Delete item is still SHOWN but rendered disabled
+  // (greyed out, not clickable) with an optional explanatory tooltip.
+  // Lets a caller keep Delete visible-but-blocked (e.g. an instance that
+  // still has issuers) rather than hiding it entirely.
+  deleteDisabled = false,
+  deleteDisabledReason,
+}) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0, flip: false })
   const btnRef = useRef(null)
@@ -93,17 +103,28 @@ export default function RowActionsMenu({ onEdit, onClone, onDelete }) {
                 Clone
               </button>
             )}
-            {onDelete && (
-              <button
-                type="button"
-                role="menuitem"
-                onClick={pick(onDelete)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete
-              </button>
-            )}
+            {onDelete &&
+              (deleteDisabled ? (
+                <div
+                  role="menuitem"
+                  aria-disabled="true"
+                  title={deleteDisabledReason || 'Delete is not available.'}
+                  className="flex w-full cursor-not-allowed items-center gap-2 px-3 py-2 text-left text-sm text-gray-300"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={pick(onDelete)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+              ))}
           </div>,
           document.body
         )}
