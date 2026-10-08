@@ -1,29 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Columns3, Plus } from 'lucide-react'
-import Select from '../common/Select'
-import RadioGroup from '../common/RadioGroup'
 import BrandLoader from '../common/BrandLoader'
 
 const inputCls =
   'w-full rounded-lg border border-gray-200 bg-grey-light py-2 px-3 text-sm text-heading outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10'
 
-const COLUMN_TYPES = [
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
-  { value: 'date', label: 'Date' },
-  { value: 'dropdown', label: 'Dropdown' },
-]
-
-// Add a custom column to the Instance Management table. Collects name,
-// type, required flag, default value, and (for dropdown) the options.
-// The default is applied to existing instances when the column is added,
-// and a required column needs a non-blank default (backend enforces it
-// too — this just mirrors the rule in the UI).
+// Add a custom column to the Instance Management table. Collects the
+// column name and the default value applied to existing instances.
 //
-// Position is NOT chosen here anymore: the new column is added at the END
-// of the table and the user drags its header wherever they want (see the
-// drag handles in InstanceManagement.jsx). `layout` is still received so
-// we can anchor the new column after the current last column (afterKey);
+// Type and Required were intentionally removed from this form: every
+// custom column is a plain optional text column (type 'text',
+// required false) — those are hardcoded in the submit payload below.
+// The audit trail (Revised By / Reviewer / Ticket Number) is captured in
+// the follow-up TicketCaptureModal that opens after this one.
+//
+// Position is NOT chosen here: the new column is added at the END of the
+// table and the user drags its header wherever they want (see the drag
+// handles in InstanceManagement.jsx). `layout` is still received so we
+// can anchor the new column after the current last column (afterKey);
 // falling back to the very start only when the table is somehow empty.
 export default function InstanceColumnModal({
   existingLabels = [],
@@ -33,10 +27,7 @@ export default function InstanceColumnModal({
   onAdd,
 }) {
   const [label, setLabel] = useState('')
-  const [type, setType] = useState('text')
-  const [required, setRequired] = useState(false)
   const [defaultValue, setDefaultValue] = useState('')
-  const [optionsText, setOptionsText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -56,23 +47,12 @@ export default function InstanceColumnModal({
   // linger after they fix the input.
   useEffect(() => {
     setError('')
-  }, [label, type, required, defaultValue, optionsText])
+  }, [label, defaultValue])
 
   const trimmed = label.trim()
   const duplicate = existingLabels.some((l) => l.toLowerCase() === trimmed.toLowerCase())
 
-  const options = useMemo(
-    () =>
-      optionsText
-        .split(/[\n,]/)
-        .map((o) => o.trim())
-        .filter(Boolean),
-    [optionsText]
-  )
-
-  const requiredNeedsDefault = required && !defaultValue.trim()
-  const dropdownNeedsOptions = type === 'dropdown' && options.length === 0
-  const valid = trimmed && !duplicate && !requiredNeedsDefault && !dropdownNeedsOptions && !submitting
+  const valid = trimmed && !duplicate && !submitting
 
   const submit = async (e) => {
     e.preventDefault()
@@ -82,10 +62,11 @@ export default function InstanceColumnModal({
     try {
       await onAdd({
         label: trimmed,
-        type,
-        required,
+        // Type/Required removed from the UI — every custom column is a
+        // plain optional text column.
+        type: 'text',
+        required: false,
         defaultValue: defaultValue.trim() || undefined,
-        options: type === 'dropdown' ? options : undefined,
         // Land at the end of the table (after the current last column);
         // null only when there are no columns yet. Users reposition by
         // dragging the header afterward.
@@ -148,71 +129,16 @@ export default function InstanceColumnModal({
             )}
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="mb-1 block text-xs font-semibold text-heading">Type</span>
-              <Select value={type} onChange={setType} options={COLUMN_TYPES} ariaLabel="Column type" />
-            </div>
-
-            <div>
-              <span className="mb-1 block text-xs font-semibold text-heading">Required</span>
-              <div className="py-2">
-                <RadioGroup
-                  value={required ? 'required' : 'optional'}
-                  onChange={(v) => setRequired(v === 'required')}
-                  options={[
-                    { value: 'optional', label: 'Optional' },
-                    { value: 'required', label: 'Required' },
-                  ]}
-                  name="column-required"
-                />
-              </div>
-            </div>
-          </div>
-
-          {type === 'dropdown' && (
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-heading">
-                Options <span className="text-red-500">*</span>
-              </span>
-              <textarea
-                value={optionsText}
-                onChange={(e) => setOptionsText(e.target.value)}
-                placeholder="One per line or comma-separated, e.g. Visa, Mastercard, Rupay"
-                rows={3}
-                className={inputCls}
-              />
-              {options.length > 0 && (
-                <span className="mt-1 flex flex-wrap gap-1">
-                  {options.map((o) => (
-                    <span key={o} className="rounded-full bg-grey-light px-2 py-0.5 text-[11px] text-body">
-                      {o}
-                    </span>
-                  ))}
-                </span>
-              )}
-              {dropdownNeedsOptions && (
-                <span className="mt-1 block text-xs text-red-500">Add at least one option.</span>
-              )}
-            </label>
-          )}
-
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-heading">
               Default value for existing instances
-              {required && <span className="text-red-500"> *</span>}
             </span>
             <input
               value={defaultValue}
               onChange={(e) => setDefaultValue(e.target.value)}
-              placeholder={required ? 'Required — applied to existing rows' : 'e.g. NA  (leave blank -> NA)'}
+              placeholder="e.g. NA  (leave blank -> NA)"
               className={inputCls}
             />
-            {requiredNeedsDefault && (
-              <span className="mt-1 block text-xs text-red-500">
-                A required column needs a default value (applied to existing instances).
-              </span>
-            )}
           </label>
 
           <p className="rounded-lg bg-grey-light px-3 py-2 text-xs text-body">

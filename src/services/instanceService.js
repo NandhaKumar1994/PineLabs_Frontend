@@ -32,7 +32,8 @@ export const instanceService = {
     return httpService.get(endpoints.instances.stats)
   },
 
-  /** Create — { name, status?, ticketNumber? }. */
+  /** Create — { name, status?, ticketNumber?, customFields? }.
+   *  Create does NOT capture Revised By / Reviewer (edit/delete only). */
   create(payload) {
     return httpService.post(endpoints.instances.root, payload)
   },
@@ -42,9 +43,14 @@ export const instanceService = {
     return httpService.put(endpoints.instances.byId(id), payload)
   },
 
-  /** Delete by id. */
-  remove(id) {
-    return httpService.delete(endpoints.instances.byId(id))
+  /**
+   * Delete by id, recording the deletion audit.
+   * audit: { ticketNumber, revisedBy, reviewer } — all mandatory
+   * (enforced by the Delete Instance dialog and the backend schema).
+   * Sent as the DELETE request body.
+   */
+  remove(id, audit) {
+    return httpService.delete(endpoints.instances.byId(id), { data: audit })
   },
 
   /** Export matching instances as a CSV Blob (respects search/status). */
