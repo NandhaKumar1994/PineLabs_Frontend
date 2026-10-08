@@ -31,11 +31,9 @@ export default function InstanceFormModal({
   // blank when the modal opens — same as `name`/`status` above. On
   // create/clone there is nothing to pre-fill from.
   const [ticket, setTicket] = useState(isEdit ? initial?.ticket ?? '' : '')
-  // Audit trail — mandatory on every create AND edit. Deliberately starts
-  // BLANK (not pre-filled from the instance's last values), the same as
-  // the Ticket Number conceptually: each change must capture who revised
-  // and reviewed THIS change, so a stale carried-over name can't be saved
-  // by accident. Applies to create, clone, and edit alike.
+  // Audit trail — EDIT ONLY. Create and Clone do NOT capture Revised By /
+  // Reviewer (those are an edit/delete audit concern). On edit they start
+  // blank so each change records who revised/reviewed THIS change.
   const [revisedBy, setRevisedBy] = useState('')
   const [reviewer, setReviewer] = useState('')
 
@@ -79,8 +77,8 @@ export default function InstanceFormModal({
     trimmed &&
     !duplicate &&
     isValidTicket(ticket) &&
-    revisedBy.trim() &&
-    reviewer.trim() &&
+    // Revised By / Reviewer are required for EDIT only.
+    (!isEdit || (revisedBy.trim() && reviewer.trim())) &&
     !missingRequired &&
     !submitting
 
@@ -105,8 +103,8 @@ export default function InstanceFormModal({
         status,
         copyIssuers,
         ticket: ticket.trim(),
-        revisedBy: revisedBy.trim(),
-        reviewer: reviewer.trim(),
+        // Only an EDIT carries the audit trail; create/clone omit it.
+        ...(isEdit ? { revisedBy: revisedBy.trim(), reviewer: reviewer.trim() } : {}),
         customFields,
       })
       if (ok === false) setSubmitting(false)
@@ -251,39 +249,41 @@ export default function InstanceFormModal({
             </button>
           )}
 
-          {/* Audit trail — Revised By / Reviewer are mandatory (gated by
-              `valid` above), same as the Ticket Number below. */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-heading">
-                Revised By <span className="text-red-500">*</span>
-              </span>
-              <div className="relative">
-                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={revisedBy}
-                  onChange={(e) => setRevisedBy(e.target.value)}
-                  placeholder="Name"
-                  className={`${inputCls} pl-9`}
-                />
-              </div>
-            </label>
+          {/* Audit trail — EDIT ONLY. Create and Clone don't capture
+              Revised By / Reviewer. */}
+          {isEdit && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-heading">
+                  Revised By <span className="text-red-500">*</span>
+                </span>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={revisedBy}
+                    onChange={(e) => setRevisedBy(e.target.value)}
+                    placeholder="Name"
+                    className={`${inputCls} pl-9`}
+                  />
+                </div>
+              </label>
 
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-heading">
-                Reviewer <span className="text-red-500">*</span>
-              </span>
-              <div className="relative">
-                <UserCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={reviewer}
-                  onChange={(e) => setReviewer(e.target.value)}
-                  placeholder="Name"
-                  className={`${inputCls} pl-9`}
-                />
-              </div>
-            </label>
-          </div>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-heading">
+                  Reviewer <span className="text-red-500">*</span>
+                </span>
+                <div className="relative">
+                  <UserCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={reviewer}
+                    onChange={(e) => setReviewer(e.target.value)}
+                    placeholder="Name"
+                    className={`${inputCls} pl-9`}
+                  />
+                </div>
+              </label>
+            </div>
+          )}
 
           <TicketField value={ticket} onChange={setTicket} />
         </div>

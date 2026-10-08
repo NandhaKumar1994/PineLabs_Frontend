@@ -202,9 +202,10 @@ export default function InstanceManagement() {
 
   // Returns the ok boolean so the modal can await it, show its branded
   // loader while the request is in flight, and only close on success.
-  const addInstance = async ({ ticket, name, status, revisedBy, reviewer, customFields }) => {
+  const addInstance = async ({ ticket, name, status, customFields }) => {
+    // Create does NOT capture Revised By / Reviewer.
     const ok = await runAction(() =>
-      instanceService.create({ name, status, ticketNumber: ticket, revisedBy, reviewer, customFields })
+      instanceService.create({ name, status, ticketNumber: ticket, customFields })
     )
     if (ok) setShowCreate(false)
     return ok
@@ -686,12 +687,10 @@ export default function InstanceManagement() {
   }
 
   // Import/export expected columns = the fixed ones + each custom label.
-  const importColumnKeys = ['name', 'ticket', 'revisedBy', 'reviewer', ...columns.map((c) => c.key)]
+  const importColumnKeys = ['name', 'ticket', ...columns.map((c) => c.key)]
   const importColumnLabels = {
     name: 'Instance',
     ticket: 'Ticket Number',
-    revisedBy: 'Revised By',
-    reviewer: 'Reviewer',
     ...Object.fromEntries(columns.map((c) => [c.key, c.label])),
   }
 

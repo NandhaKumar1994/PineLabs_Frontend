@@ -32,9 +32,8 @@ export const instanceService = {
     return httpService.get(endpoints.instances.stats)
   },
 
-  /** Create — { name, status?, ticketNumber?, revisedBy, reviewer, customFields? }.
-   *  revisedBy/reviewer are mandatory on create (enforced by the form and
-   *  the backend's CreateInstanceRequest schema). */
+  /** Create — { name, status?, ticketNumber?, customFields? }.
+   *  Create does NOT capture Revised By / Reviewer (edit/delete only). */
   create(payload) {
     return httpService.post(endpoints.instances.root, payload)
   },
