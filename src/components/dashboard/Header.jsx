@@ -1,10 +1,12 @@
 import { Search, Bell, ChevronDown, HelpCircle, UserCog } from 'lucide-react'
 import { useTheme } from '../../theme/ThemeContext'
-import { useRole, ROLES } from '../../theme/RoleContext'
+import { useRole } from '../../theme/RoleContext'
 
 export default function Header({ title, subtitle }) {
   const { theme } = useTheme()
-  const { role, setRole } = useRole()
+  // Role list comes from the backend vocabulary via context (falls back
+  // to the built-in list before /roles resolves).
+  const { role, setRole, roles } = useRole()
   const t2 = theme === 'theme2'
   return (
     <header
@@ -72,7 +74,7 @@ export default function Header({ title, subtitle }) {
             title="Switch role"
             className="absolute inset-0 cursor-pointer opacity-0"
           >
-            {ROLES.map((r) => (
+            {roles.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>

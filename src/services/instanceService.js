@@ -27,6 +27,15 @@ export const instanceService = {
     return httpService.get(endpoints.instances.byId(id))
   },
 
+    /**
+   * Issuers grouped under an instance (derived from BIN data on the
+   * backend): { instanceId, instanceName, issuers: string[], total }.
+   * Backs the Create User screen's instance -> issuer drill-down.
+   */
+  getIssuers(id) {
+    return httpService.get(endpoints.instances.issuers(id))
+  },
+
   /** Header cards: { totalInstances, activeInstances, issuersGrouped }. */
   getStats() {
     return httpService.get(endpoints.instances.stats)

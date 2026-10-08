@@ -19,5 +19,21 @@ export const endpoints = {
     columns: '/instances/columns',
     columnById: (id) => `/instances/columns/${id}`,
     columnsReorder: '/instances/columns/reorder',
+    // Issuers grouped under a given instance (derived from BIN data).
+    issuers: (id) => `/instances/${id}/issuers`,
+  },
+  users: {
+    root: '/users',
+    byId: (id) => `/users/${id}`,
+    stats: '/users/stats',
+    export: '/users/export',
+    import: '/users/import',
+    importTemplate: '/users/import/template',
+    columns: '/users/columns',
+    columnById: (id) => `/users/columns/${id}`,
+    columnsReorder: '/users/columns/reorder',
+  },
+  roles: {
+    root: '/roles',
   },
 }
